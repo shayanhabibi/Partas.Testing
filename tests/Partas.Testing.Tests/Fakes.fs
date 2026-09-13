@@ -2,12 +2,22 @@ module Partas.Testing.Tests.Fakes
 
 open System.Threading
 open System.Threading.Tasks
+open Microsoft.Testing.Platform.CommandLine
 open Microsoft.Testing.Platform.Extensions
 open Microsoft.Testing.Platform.Extensions.Messages
 open Microsoft.Testing.Platform.Messages
 open Microsoft.Testing.Platform.TestHost
 open Partas.Testing
 open Partas.TestingPlatform
+
+/// <summary>Reports no option as set, for fixtures that never declare command-line options.</summary>
+type NoCommandLineOptions() =
+    interface ICommandLineOptions with
+        member _.IsOptionSet(_) = false
+
+        member _.TryGetOptionArgumentList(_, arguments: byref<string[]>) =
+            arguments <- [||]
+            false
 
 type RecordingMessageBus() =
     let gate = obj ()
@@ -55,7 +65,7 @@ let runSuiteUpdatesUnder (cancellation: CancellationToken) filterApplied tree =
           Reporter = Reporter(bus, StubProducer(), SessionUid "session")
           CancellationToken = cancellation
           FilterApplied = filterApplied
-          Services = null }
+          CommandLineOptions = NoCommandLineOptions() }
 
     (Runner.run context).GetAwaiter().GetResult()
 

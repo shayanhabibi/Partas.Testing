@@ -9,12 +9,14 @@ open System.Threading
 open System.Threading.Tasks
 open Microsoft.Testing.Platform.Builder
 open Microsoft.Testing.Platform.Capabilities.TestFramework
+open Microsoft.Testing.Platform.CommandLine
 open Microsoft.Testing.Platform.Extensions
 open Microsoft.Testing.Platform.Extensions.CommandLine
 open Microsoft.Testing.Platform.Extensions.Messages
 open Microsoft.Testing.Platform.Extensions.TestFramework
 open Microsoft.Testing.Platform.Helpers
 open Microsoft.Testing.Platform.Requests
+open Microsoft.Testing.Platform.Services
 
 /// <summary>The surviving tree, a reporter for its leaves, and the session's cancellation.</summary>
 type RunContext<'T> =
@@ -24,11 +26,8 @@ type RunContext<'T> =
       CancellationToken: CancellationToken
       /// <summary>Whether the platform narrowed this run, rather than asking for everything.</summary>
       FilterApplied: bool
-      /// <summary>
-      /// MTP's service provider, e.g. for <c>ServiceProviderExtensions.GetCommandLineOptions()</c>
-      /// to read the arguments a declared option received.
-      /// </summary>
-      Services: IServiceProvider }
+      /// <summary>MTP's parsed command-line options, for reading a declared option's value.</summary>
+      CommandLineOptions: ICommandLineOptions }
 
 type FrameworkDefinition<'T> =
     { Uid: string
@@ -61,7 +60,7 @@ type Framework<'T>(definition: FrameworkDefinition<'T>) =
     let mutable services: IServiceProvider = null
 
     /// <summary>Records the service provider MTP hands the framework at registration time.</summary>
-    member _.SetServices(serviceProvider: IServiceProvider) = services <- serviceProvider
+    member internal _.SetServices(serviceProvider: IServiceProvider) = services <- serviceProvider
 
     interface IExtension with
         member _.Uid = definition.Uid
@@ -110,7 +109,7 @@ type Framework<'T>(definition: FrameworkDefinition<'T>) =
                                       Reporter = Reporter(context.MessageBus, producer, session)
                                       CancellationToken = context.CancellationToken
                                       FilterApplied = not (request.Filter :? NopFilter)
-                                      Services = services }
+                                      CommandLineOptions = services.GetCommandLineOptions() }
 
                                 do! definition.RunTests runContext
                     | _ -> ()
