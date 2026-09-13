@@ -77,47 +77,44 @@ type Test =
     static member caseAsync
         (
             name: string,
-            body: TestBody,
             [<CallerFilePath>] ?file: string,
             [<CallerLineNumber>] ?line: int
-        ) : TestTree<TestBody> =
-        Leaf(name, locate file line, [], body)
+        ) =
+        fun (body: TestBody) -> Leaf(name, locate file line, [], body)
 
     static member case
         (
             name: string,
-            body: unit -> unit,
             [<CallerFilePath>] ?file: string,
             [<CallerLineNumber>] ?line: int
-        ) : TestTree<TestBody> =
-        Leaf(name, locate file line, [], async { return body () })
+        ) =
+        fun (body: unit -> unit) -> Leaf(name, locate file line, [], async { return body () })
 
     static member focused
         (
             name: string,
-            body: unit -> unit,
             [<CallerFilePath>] ?file: string,
             [<CallerLineNumber>] ?line: int
-        ) : TestTree<TestBody> =
-        Leaf(name, locate file line, focusProperties TestFocus.Focused, async { return body () })
+        ) =
+        fun (body: unit -> unit) ->
+            Leaf(name, locate file line, focusProperties TestFocus.Focused, async { return body () })
 
     static member pending
         (
             name: string,
-            body: unit -> unit,
             [<CallerFilePath>] ?file: string,
             [<CallerLineNumber>] ?line: int
-        ) : TestTree<TestBody> =
-        Leaf(name, locate file line, focusProperties TestFocus.Pending, async { return body () })
+        ) =
+        fun (body: unit -> unit) ->
+            Leaf(name, locate file line, focusProperties TestFocus.Pending, async { return body () })
 
     static member list
         (
             name: string,
-            children: TestTree<TestBody> list,
             [<CallerFilePath>] ?file: string,
             [<CallerLineNumber>] ?line: int
-        ) : TestTree<TestBody> =
-        Group(name, locate file line, [], children)
+        ) =
+        fun (children: TestTree<TestBody> list) -> Group(name, locate file line, [], children)
 
     /// <summary>
     /// A group owning a fixture. Setup runs once before the group's first leaf, and the children
@@ -130,47 +127,47 @@ type Test =
             name: string,
             setup: unit -> Async<'a>,
             teardown: 'a -> Async<unit>,
-            children: Fixture<'a> -> TestTree<TestBody> list,
             [<CallerFilePath>] ?file: string,
             [<CallerLineNumber>] ?line: int
-        ) : TestTree<TestBody> =
-        let fixture = Fixture<'a> name
+        ) =
+        fun (children: Fixture<'a> -> TestTree<TestBody> list) ->
+            let fixture = Fixture<'a> name
 
-        let bracket =
-            FixtureProperty(
-                (fun () ->
-                    async {
-                        let! value = setup ()
-                        fixture.Fill value
-                    }),
-                fun () ->
-                    async {
-                        match fixture.Held with
-                        | ValueSome value ->
-                            try
-                                do! teardown value
-                            finally
-                                fixture.Release()
-                        | ValueNone -> ()
-                    }
-            )
+            let bracket =
+                FixtureProperty(
+                    (fun () ->
+                        async {
+                            let! value = setup ()
+                            fixture.Fill value
+                        }),
+                    fun () ->
+                        async {
+                            match fixture.Held with
+                            | ValueSome value ->
+                                try
+                                    do! teardown value
+                                finally
+                                    fixture.Release()
+                            | ValueNone -> ()
+                        }
+                )
 
-        Group(name, locate file line, [ bracket ], children fixture)
+            Group(name, locate file line, [ bracket ], children fixture)
 
     static member focusedList
         (
             name: string,
-            children: TestTree<TestBody> list,
             [<CallerFilePath>] ?file: string,
             [<CallerLineNumber>] ?line: int
-        ) : TestTree<TestBody> =
-        Group(name, locate file line, focusProperties TestFocus.Focused, children)
+        ) =
+        fun (children: TestTree<TestBody> list) ->
+            Group(name, locate file line, focusProperties TestFocus.Focused, children)
 
     static member pendingList
         (
             name: string,
-            children: TestTree<TestBody> list,
             [<CallerFilePath>] ?file: string,
             [<CallerLineNumber>] ?line: int
-        ) : TestTree<TestBody> =
-        Group(name, locate file line, focusProperties TestFocus.Pending, children)
+        ) =
+        fun (children: TestTree<TestBody> list) ->
+            Group(name, locate file line, focusProperties TestFocus.Pending, children)

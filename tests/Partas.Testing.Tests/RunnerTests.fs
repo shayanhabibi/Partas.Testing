@@ -16,7 +16,7 @@ let private assertionAt (updates: Map<string, TestNodeUpdateMessage>) uid =
 let tests =
     testList "Runner.run" [
         test "a body that returns is reported passed" {
-            let states = runSuite false (Test.list ("s", [ Test.case ("a", noop) ]))
+            let states = runSuite false (Test.list "s" [ Test.case "a" noop ])
 
             Expect.isTrue
                 (stateAt states "/s/a" :? PassedTestNodeStateProperty)
@@ -27,7 +27,7 @@ let tests =
             let boom = exn "expected 1, got 2"
 
             let states =
-                runSuite false (Test.list ("s", [ Test.case ("a", fun () -> raise boom) ]))
+                runSuite false (Test.list "s" [ Test.case "a" (fun () -> raise boom) ])
 
             match stateAt states "/s/a" with
             | :? FailedTestNodeStateProperty as failed -> Expect.equal failed.Exception boom "the exception"
@@ -36,10 +36,10 @@ let tests =
 
         test "one failure does not stop the rest of the run" {
             let tree =
-                Test.list ("s", [
-                    Test.case ("a", fun () -> failwith "boom")
-                    Test.case ("b", noop)
-                ])
+                Test.list "s" [
+                    Test.case "a" (fun () -> failwith "boom")
+                    Test.case "b" noop
+                ]
 
             let states = runSuite false tree
 
@@ -51,14 +51,14 @@ let tests =
             let mutable ran = false
 
             let states =
-                runSuite false (Test.list ("s", [ Test.pending ("a", fun () -> ran <- true) ]))
+                runSuite false (Test.list "s" [ Test.pending "a" (fun () -> ran <- true) ])
 
             Expect.isTrue (stateAt states "/s/a" :? SkippedTestNodeStateProperty) "skipped"
             Expect.isFalse ran "the body did not run"
         }
 
         test "the skip reason is reported" {
-            let states = runSuite false (Test.list ("s", [ Test.pending ("a", noop) ]))
+            let states = runSuite false (Test.list "s" [ Test.pending "a" noop ])
             Expect.equal (stateAt states "/s/a").Explanation "pending" "the reason"
         }
 
@@ -66,10 +66,10 @@ let tests =
             let mutable ranB = false
 
             let tree =
-                Test.list ("s", [
-                    Test.focused ("a", noop)
-                    Test.case ("b", fun () -> ranB <- true)
-                ])
+                Test.list "s" [
+                    Test.focused "a" noop
+                    Test.case "b" (fun () -> ranB <- true)
+                ]
 
             let states = runSuite false tree
 
@@ -80,7 +80,7 @@ let tests =
 
         test "a platform filter overrides focus" {
             let tree =
-                Test.list ("s", [ Test.focused ("a", noop); Test.case ("b", noop) ])
+                Test.list "s" [ Test.focused "a" noop; Test.case "b" noop ]
 
             let states = runSuite true tree
 
@@ -91,7 +91,7 @@ let tests =
             let raised = AssertionException("parses an int", Some "1", Some "2")
 
             let updates =
-                runSuiteUpdates false (Test.list ("s", [ Test.case ("a", fun () -> raise raised) ]))
+                runSuiteUpdates false (Test.list "s" [ Test.case "a" (fun () -> raise raised) ])
                 |> terminalUpdates
 
             match updates.["/s/a"].TestNode.Properties.OfType<TestNodeStateProperty>() |> Array.tryHead with
@@ -108,11 +108,11 @@ let tests =
 
         test "every admitted leaf reaches a terminal state" {
             let tree =
-                Test.list ("s", [
-                    Test.case ("a", noop)
-                    Test.case ("b", fun () -> failwith "boom")
-                    Test.pending ("c", noop)
-                ])
+                Test.list "s" [
+                    Test.case "a" noop
+                    Test.case "b" (fun () -> failwith "boom")
+                    Test.pending "c" noop
+                ]
 
             let states = runSuite false tree
 

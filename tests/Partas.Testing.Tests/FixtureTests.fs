@@ -20,9 +20,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { log.Add "setup" }),
-                    (fun () -> async { log.Add "teardown" }),
-                    fun _ -> [ Test.case ("a", fun () -> log.Add "a"); Test.case ("b", fun () -> log.Add "b") ]
+                    (fun () -> async { log.Add "teardown" })
                 )
+                    (fun _ -> [ Test.case "a" (fun () -> log.Add "a"); Test.case "b" (fun () -> log.Add "b") ])
 
             runSuite false tree |> ignore
 
@@ -36,9 +36,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { return 7 }),
-                    (fun _ -> async { return () }),
-                    fun fixture -> [ Test.case ("a", fun () -> seen.Add fixture.Value) ]
+                    (fun _ -> async { return () })
                 )
+                    (fun fixture -> [ Test.case "a" (fun () -> seen.Add fixture.Value) ])
 
             runSuite false tree |> ignore
 
@@ -52,9 +52,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { return 7 }),
-                    (fun value -> async { torn.Add value }),
-                    fun _ -> [ Test.case ("a", noop) ]
+                    (fun value -> async { torn.Add value })
                 )
+                    (fun _ -> [ Test.case "a" noop ])
 
             runSuite false tree |> ignore
 
@@ -66,9 +66,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { return 7 }),
-                    (fun _ -> async { return () }),
-                    fun _ -> [ Test.case ("a", noop) ]
+                    (fun _ -> async { return () })
                 )
+                    (fun _ -> [ Test.case "a" noop ])
 
             let states = runSuite false tree
 
@@ -82,11 +82,11 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { log.Add "setup" }),
-                    (fun () -> async { log.Add "teardown" }),
-                    fun _ ->
-                        [ Test.case ("a", fun () -> failwith "the body raised")
-                          Test.case ("b", fun () -> log.Add "b") ]
+                    (fun () -> async { log.Add "teardown" })
                 )
+                    (fun _ ->
+                        [ Test.case "a" (fun () -> failwith "the body raised")
+                          Test.case "b" (fun () -> log.Add "b") ])
 
             let states = runSuite false tree
 
@@ -102,9 +102,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { log.Add "setup" }),
-                    (fun () -> async { log.Add "teardown" }),
-                    fun _ -> [ Test.case ("a", fun () -> source.Cancel()) ]
+                    (fun () -> async { log.Add "teardown" })
                 )
+                    (fun _ -> [ Test.case "a" (fun () -> source.Cancel()) ])
 
             let states = runSuiteUnder source.Token false tree
 
@@ -117,9 +117,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { raise (exn "the setup raised") }),
-                    (fun _ -> idle ()),
-                    fun _ -> [ Test.pending ("dormant", noop); Test.case ("a", noop) ]
+                    (fun _ -> idle ())
                 )
+                    (fun _ -> [ Test.pending "dormant" noop; Test.case "a" noop ])
 
             let states = runSuite false tree
 
@@ -132,9 +132,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { raise (exn "the setup raised") }),
-                    (fun _ -> idle ()),
-                    fun _ -> [ Test.focused ("chosen", noop); Test.case ("passed over", noop) ]
+                    (fun _ -> idle ())
                 )
+                    (fun _ -> [ Test.focused "chosen" noop; Test.case "passed over" noop ])
 
             let states = runSuite false tree
 
@@ -144,7 +144,7 @@ let tests =
 
         test "a fixture group that succeeds reports no state of its own" {
             let tree =
-                Test.listWith ("s", (fun () -> async { return 7 }), (fun _ -> idle ()), fun _ -> [ Test.case ("a", noop) ])
+                Test.listWith ("s", (fun () -> async { return 7 }), (fun _ -> idle ())) (fun _ -> [ Test.case "a" noop ])
 
             let states = runSuite false tree
 
@@ -156,7 +156,7 @@ let tests =
             let boom = exn "the setup raised"
 
             let tree =
-                Test.listWith ("s", (fun () -> async { raise boom }), (fun _ -> idle ()), fun _ -> [ Test.case ("a", noop) ])
+                Test.listWith ("s", (fun () -> async { raise boom }), (fun _ -> idle ())) (fun _ -> [ Test.case "a" noop ])
 
             let states = runSuite false tree
 
@@ -170,9 +170,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { raise (exn "the setup raised") }),
-                    (fun _ -> idle ()),
-                    fun _ -> [ Test.case ("a", noop) ]
+                    (fun _ -> idle ())
                 )
+                    (fun _ -> [ Test.case "a" noop ])
 
             let states = runSuite false tree
 
@@ -187,9 +187,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { raise (exn "the setup raised") }),
-                    (fun _ -> async { log.Add "teardown" }),
-                    fun _ -> [ Test.list ("inner", [ Test.case ("a", fun () -> log.Add "a") ]) ]
+                    (fun _ -> async { log.Add "teardown" })
                 )
+                    (fun _ -> [ Test.list "inner" [ Test.case "a" (fun () -> log.Add "a") ] ])
 
             let states = runSuite false tree
 
@@ -204,9 +204,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { return 7 }),
-                    (fun _ -> async { raise boom }),
-                    fun _ -> [ Test.case ("a", noop) ]
+                    (fun _ -> async { raise boom })
                 )
+                    (fun _ -> [ Test.case "a" noop ])
 
             let states = runSuite false tree
 
@@ -224,9 +224,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { return 7 }),
-                    (fun _ -> async { raise (exn "the teardown raised") }),
-                    fun _ -> [ Test.case ("a", fun () -> raise fromBody) ]
+                    (fun _ -> async { raise (exn "the teardown raised") })
                 )
+                    (fun _ -> [ Test.case "a" (fun () -> raise fromBody) ])
 
             let states = runSuite false tree
 
@@ -242,9 +242,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { log.Add "setup" }),
-                    (fun () -> async { log.Add "teardown" }),
-                    fun _ -> [ Test.pending ("a", noop) ]
+                    (fun () -> async { log.Add "teardown" })
                 )
+                    (fun _ -> [ Test.pending "a" noop ])
 
             let states = runSuite false tree
 
@@ -256,16 +256,15 @@ let tests =
             let log = ResizeArray<string>()
 
             let tree =
-                Test.list (
-                    "root",
-                    [ Test.listWith (
-                          "s",
-                          (fun () -> async { log.Add "setup" }),
-                          (fun () -> async { log.Add "teardown" }),
-                          fun _ -> [ Test.case ("a", noop) ]
-                      )
-                      Test.list ("other", [ Test.focused ("b", noop) ]) ]
-                )
+                Test.list "root" [
+                    Test.listWith (
+                        "s",
+                        (fun () -> async { log.Add "setup" }),
+                        (fun () -> async { log.Add "teardown" })
+                    )
+                        (fun _ -> [ Test.case "a" noop ])
+                    Test.list "other" [ Test.focused "b" noop ]
+                ]
 
             runSuite false tree |> ignore
 
@@ -279,9 +278,9 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { log.Add "setup" }),
-                    (fun () -> async { log.Add "teardown" }),
-                    fun _ -> [ Test.focused ("a", fun () -> log.Add "a"); Test.case ("b", fun () -> log.Add "b") ]
+                    (fun () -> async { log.Add "teardown" })
                 )
+                    (fun _ -> [ Test.focused "a" (fun () -> log.Add "a"); Test.case "b" (fun () -> log.Add "b") ])
 
             runSuite false tree |> ignore
 
@@ -299,8 +298,9 @@ let tests =
                             log.Add "outer setup"
                             return 1
                         }),
-                    (fun _ -> async { log.Add "outer teardown" }),
-                    fun outer ->
+                    (fun _ -> async { log.Add "outer teardown" })
+                )
+                    (fun outer ->
                         [ Test.listWith (
                               "inner",
                               (fun () ->
@@ -308,10 +308,9 @@ let tests =
                                       log.Add "inner setup"
                                       return outer.Value + 1
                                   }),
-                              (fun _ -> async { log.Add "inner teardown" }),
-                              fun inner -> [ Test.case ("a", fun () -> log.Add $"a reads {outer.Value} and {inner.Value}") ]
-                          ) ]
-                )
+                              (fun _ -> async { log.Add "inner teardown" })
+                          )
+                              (fun inner -> [ Test.case "a" (fun () -> log.Add $"a reads {outer.Value} and {inner.Value}") ]) ])
 
             runSuite false tree |> ignore
 
@@ -332,15 +331,15 @@ let tests =
                             log.Add "outer setup"
                             return 1
                         }),
-                    (fun _ -> async { log.Add "outer teardown" }),
-                    fun _ ->
+                    (fun _ -> async { log.Add "outer teardown" })
+                )
+                    (fun _ ->
                         [ Test.listWith (
                               "inner",
                               (fun () -> async { raise (exn "the inner setup raised") }),
-                              (fun _ -> async { log.Add "inner teardown" }),
-                              fun _ -> [ Test.case ("a", fun () -> log.Add "a") ]
-                          ) ]
-                )
+                              (fun _ -> async { log.Add "inner teardown" })
+                          )
+                              (fun _ -> [ Test.case "a" (fun () -> log.Add "a") ]) ])
 
             let states = runSuite false tree
 
@@ -356,11 +355,11 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { return 7 }),
-                    (fun _ -> idle ()),
-                    fun fixture ->
-                        handles.Add fixture
-                        [ Test.case ("a", noop) ]
+                    (fun _ -> idle ())
                 )
+                    (fun fixture ->
+                        handles.Add fixture
+                        [ Test.case "a" noop ])
 
             let fixture = handles.[0]
 
@@ -378,11 +377,11 @@ let tests =
                 Test.listWith (
                     "s",
                     (fun () -> async { return 7 }),
-                    (fun _ -> async { raise (exn "the teardown raised") }),
-                    fun fixture ->
-                        handles.Add fixture
-                        [ Test.case ("a", noop) ]
+                    (fun _ -> async { raise (exn "the teardown raised") })
                 )
+                    (fun fixture ->
+                        handles.Add fixture
+                        [ Test.case "a" noop ])
 
             runSuite false tree |> ignore
 
