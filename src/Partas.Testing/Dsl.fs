@@ -22,6 +22,20 @@ type FocusProperty(state: TestFocus) =
     member _.State = state
     interface IProperty
 
+/// <summary>Whether a group runs its children concurrently or in the order written.</summary>
+[<RequireQualifiedAccess>]
+type TestMode =
+    | Sequential
+    | Parallel
+
+/// <summary>
+/// A group's execution mode, carried through the binding's property escape hatch. Descendants
+/// inherit it unless they declare their own.
+/// </summary>
+type ModeProperty(mode: TestMode) =
+    member _.Mode = mode
+    interface IProperty
+
 /// <summary>
 /// A handle on a group's fixture value, given to the group's children when they are built and
 /// filled while the group runs.
@@ -67,6 +81,41 @@ module internal Construction =
         match focus with
         | TestFocus.Normal -> []
         | state -> [ FocusProperty state ]
+
+    /// <summary>
+    /// A group bracketing its children with a fixture filled by setup and released by teardown,
+    /// carrying the given properties alongside the bracket.
+    /// </summary>
+    let bracketed
+        (name: string)
+        (location: SourceLocation option)
+        (properties: IProperty list)
+        (setup: unit -> Async<'a>)
+        (teardown: 'a -> Async<unit>)
+        (children: Fixture<'a> -> TestTree<TestBody> list)
+        =
+        let fixture = Fixture<'a> name
+
+        let bracket =
+            FixtureProperty(
+                (fun () ->
+                    async {
+                        let! value = setup ()
+                        fixture.Fill value
+                    }),
+                fun () ->
+                    async {
+                        match fixture.Held with
+                        | ValueSome value ->
+                            try
+                                do! teardown value
+                            finally
+                                fixture.Release()
+                        | ValueNone -> ()
+                    }
+            )
+
+        Group(name, location, bracket :: properties, children fixture)
 
 /// <summary>
 /// Constructors for tests and groups. These are static members because F# honours caller-info
@@ -131,28 +180,48 @@ type Test =
             [<CallerLineNumber>] ?line: int
         ) =
         fun (children: Fixture<'a> -> TestTree<TestBody> list) ->
-            let fixture = Fixture<'a> name
+            bracketed name (locate file line) [] setup teardown children
 
-            let bracket =
-                FixtureProperty(
-                    (fun () ->
-                        async {
-                            let! value = setup ()
-                            fixture.Fill value
-                        }),
-                    fun () ->
-                        async {
-                            match fixture.Held with
-                            | ValueSome value ->
-                                try
-                                    do! teardown value
-                                finally
-                                    fixture.Release()
-                            | ValueNone -> ()
-                        }
-                )
+    /// <summary>
+    /// A group owning a fixture whose children run concurrently. Setup completes before the
+    /// first child starts and teardown begins after the last one finishes.
+    /// </summary>
+    static member parallelListWith
+        (
+            name: string,
+            setup: unit -> Async<'a>,
+            teardown: 'a -> Async<unit>,
+            [<CallerFilePath>] ?file: string,
+            [<CallerLineNumber>] ?line: int
+        ) =
+        fun (children: Fixture<'a> -> TestTree<TestBody> list) ->
+            bracketed name (locate file line) [ ModeProperty TestMode.Parallel ] setup teardown children
 
-            Group(name, locate file line, [ bracket ], children fixture)
+    /// <summary>
+    /// A group whose children run in the order written. Descendants inherit the mode unless they
+    /// declare their own.
+    /// </summary>
+    static member sequentialList
+        (
+            name: string,
+            [<CallerFilePath>] ?file: string,
+            [<CallerLineNumber>] ?line: int
+        ) =
+        fun (children: TestTree<TestBody> list) ->
+            Group(name, locate file line, [ ModeProperty TestMode.Sequential ], children)
+
+    /// <summary>
+    /// A group whose children run concurrently. Descendants inherit the mode unless they declare
+    /// their own; a descendant owning a fixture runs its children in order.
+    /// </summary>
+    static member parallelList
+        (
+            name: string,
+            [<CallerFilePath>] ?file: string,
+            [<CallerLineNumber>] ?line: int
+        ) =
+        fun (children: TestTree<TestBody> list) ->
+            Group(name, locate file line, [ ModeProperty TestMode.Parallel ], children)
 
     static member focusedList
         (

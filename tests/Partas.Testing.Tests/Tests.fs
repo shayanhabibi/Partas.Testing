@@ -93,4 +93,65 @@ let tests =
                 Expect.equal focus.State TestFocus.Focused "focused"
             | other -> failtestf "expected a group, got %A" other
         }
+
+        test "a plain list carries no mode" {
+            match Test.list "parser" [] with
+            | Group(_, _, properties, _) ->
+                Expect.isEmpty (properties |> List.filter (fun p -> p :? ModeProperty)) "no mode"
+            | other -> failtestf "expected a group, got %A" other
+        }
+
+        test "a sequential list carries the sequential mode" {
+            match Test.sequentialList "parser" [] with
+            | Group(_, _, properties, _) ->
+                let mode = properties |> List.pick (function :? ModeProperty as m -> Some m | _ -> None)
+                Expect.equal mode.Mode TestMode.Sequential "sequential"
+            | other -> failtestf "expected a group, got %A" other
+        }
+
+        test "a parallel list carries the parallel mode" {
+            match Test.parallelList "parser" [] with
+            | Group(_, _, properties, _) ->
+                let mode = properties |> List.pick (function :? ModeProperty as m -> Some m | _ -> None)
+                Expect.equal mode.Mode TestMode.Parallel "parallel"
+            | other -> failtestf "expected a group, got %A" other
+        }
+
+        test "a parallel fixture list carries the parallel mode" {
+            let group =
+                Test.parallelListWith ("parser", (fun () -> async { return 1 }), (fun _ -> async { return () }))
+                    (fun _ -> [])
+
+            match group with
+            | Group(_, _, properties, _) ->
+                let mode = properties |> List.pick (function :? ModeProperty as m -> Some m | _ -> None)
+                Expect.equal mode.Mode TestMode.Parallel "parallel"
+            | other -> failtestf "expected a group, got %A" other
+        }
+
+        test "a sequential list records the line it is written on" {
+            let group, written = Test.sequentialList "parser" [], int __LINE__
+
+            match group with
+            | Group(_, Some location, _, _) -> Expect.equal location.Line written "the line"
+            | other -> failtestf "expected a located group, got %A" other
+        }
+
+        test "a parallel list records the line it is written on" {
+            let group, written = Test.parallelList "parser" [], int __LINE__
+
+            match group with
+            | Group(_, Some location, _, _) -> Expect.equal location.Line written "the line"
+            | other -> failtestf "expected a located group, got %A" other
+        }
+
+        test "a parallel fixture list records the line it is written on" {
+            let setup () = async { return 1 }
+            let teardown _ = async { return () }
+            let group, written = Test.parallelListWith ("parser", setup, teardown) (fun _ -> []), int __LINE__
+
+            match group with
+            | Group(_, Some location, _, _) -> Expect.equal location.Line written "the line"
+            | other -> failtestf "expected a located group, got %A" other
+        }
     ]

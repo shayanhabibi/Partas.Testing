@@ -16,6 +16,7 @@
         <Compile Include="RunnerTests.fs"/>
         <Compile Include="ExpectTests.fs"/>
         <Compile Include="FixtureTests.fs"/>
+        <Compile Include="ParallelTests.fs"/>
         <Compile Include="Main.fs"/>
     </ItemGroup>
 

@@ -13,11 +13,29 @@ module Runner =
             | :? FixtureProperty as fixture -> Some fixture
             | _ -> None)
 
+    let private declaredMode (node: ResolvedNode) =
+        node.Properties
+        |> List.tryPick (function
+            | :? ModeProperty as mode -> Some mode.Mode
+            | _ -> None)
+
+    /// <summary>
+    /// The mode a group runs its children under. A declared mode applies. A group owning a
+    /// fixture otherwise runs its children in order; every other group inherits its parent's
+    /// mode.
+    /// </summary>
+    let private modeOf (node: ResolvedNode) (inherited: TestMode) =
+        match declaredMode node with
+        | Some declared -> declared
+        | None when (fixtureOf node).IsSome -> TestMode.Sequential
+        | None -> inherited
+
     /// <summary>
     /// Runs every leaf the platform admitted, reporting a body that raises as failed and a leaf
     /// the plan excludes as skipped. A platform filter overrides a source marking of focus. A
     /// group owning a fixture brackets the leaves it runs with setup and teardown, and reports an
-    /// outcome of its own when either raises.
+    /// outcome of its own when either raises. The root runs its children concurrently, and every
+    /// group runs its own children under the mode <c>modeOf</c> gives it.
     /// </summary>
     let run (context: RunContext<TestBody>) : Task =
         let plan = Focus.plan (not context.FilterApplied) context.Tree
@@ -82,7 +100,7 @@ module Runner =
                     return Some(running.IsCanceled, error)
             }
 
-        let rec walk (parent: string option) (blocked: string option) tree =
+        let rec walk (parent: string option) (inherited: TestMode) (blocked: string option) tree =
             task {
                 match tree with
                 | ResolvedLeaf(node, payload) ->
@@ -99,11 +117,25 @@ module Runner =
                         do! report leaf (settled (skipped cancelled))
                     | _, None -> do! report leaf (execute leaf)
                 | ResolvedGroup(node, children) ->
+                    let mode = modeOf node inherited
+
                     let descend blocking =
-                        task {
-                            for child in children do
-                                do! walk (Some node.Uid) blocking child
-                        }
+                        match mode with
+                        | TestMode.Sequential ->
+                            task {
+                                for child in children do
+                                    do! walk (Some node.Uid) mode blocking child
+                            }
+                        | TestMode.Parallel ->
+                            // Mapping the walk over the children starts each one; `WhenAll` joins them.
+                            task {
+                                let running: Task[] =
+                                    children
+                                    |> List.map (fun child -> walk (Some node.Uid) mode blocking child :> Task)
+                                    |> Array.ofList
+
+                                do! Task.WhenAll running
+                            }
 
                     match fixtureOf node, blocked with
                     | Some fixture, None when List.exists runsAnything children ->
@@ -130,4 +162,4 @@ module Runner =
                     | _ -> do! descend blocked
             }
 
-        walk None None context.Tree
+        walk None TestMode.Parallel None context.Tree

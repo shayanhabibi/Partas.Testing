@@ -143,7 +143,7 @@ let tests =
                 }
 
             let tree =
-                Test.list "s" [ Test.case "a" (fun () -> cts.Cancel()); Test.caseAsync "b" b ]
+                Test.sequentialList "s" [ Test.case "a" (fun () -> cts.Cancel()); Test.caseAsync "b" b ]
 
             let states = runSuiteUnder cts.Token false tree
 

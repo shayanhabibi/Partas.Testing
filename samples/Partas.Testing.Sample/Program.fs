@@ -17,6 +17,16 @@ let suite =
 
         Test.case "reports the source span" (fun () -> ())
 
+        Test.parallelList "concurrent phases" [
+            Test.caseAsync "lexes" (async { do! Async.Sleep 250 })
+            Test.caseAsync "resolves" (async { do! Async.Sleep 250 })
+        ]
+
+        Test.sequentialList "ordered phases" [
+            Test.caseAsync "reads" (async { do! Async.Sleep 250 })
+            Test.caseAsync "writes" (async { do! Async.Sleep 250 })
+        ]
+
         Test.listWith (
             "a session",
             (fun () -> async { return "1 2 3" }),
