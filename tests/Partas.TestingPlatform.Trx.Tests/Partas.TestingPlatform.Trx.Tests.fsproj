@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <IsPackable>false</IsPackable>
+        <GenerateProgramFile>false</GenerateProgramFile>
+        <RootNamespace>Partas.TestingPlatform.Trx.Tests</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="TrxReportTests.fs"/>
+        <Compile Include="Main.fs"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Expecto" Version="11.0.0-alpha8"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../src/Partas.TestingPlatform.Trx/Partas.TestingPlatform.Trx.fsproj"/>
+    </ItemGroup>
+
+</Project>

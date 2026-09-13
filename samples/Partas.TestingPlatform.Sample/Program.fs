@@ -2,8 +2,10 @@ module Partas.TestingPlatform.Sample.Program
 
 open System.CommandLine
 open System.Threading.Tasks
+open Microsoft.Testing.Extensions
 open Partas.TestingPlatform
 open Partas.TestingPlatform.CommandLine
+open Partas.TestingPlatform.Trx
 
 /// <summary>A test body, which the binding never interprets.</summary>
 type Body = unit -> TestOutcome
@@ -42,7 +44,10 @@ let runTests (context: RunContext<Body>) : Task =
         | false, _ -> printfn "my-custom-filter not set"
 
         for leaf in context.Leaves do
-            let body _ = Task.FromResult(TestResult.create (leaf.Payload ()))
+            let body _ =
+                let result = TestResult.create (leaf.Payload ())
+                Task.FromResult { result with ExtraProperties = [ TrxReport.fullyQualifiedTypeName leaf.Node ] }
+
             let! _ = context.Reporter.Run(leaf, body, context.CancellationToken)
             ()
     }
@@ -56,5 +61,7 @@ let main argv =
         tests (fun () -> suite)
         onRun runTests
         commandLineOptions [ myCustomFilterProvider ]
+        capabilities [ TrxReport.capability ]
+        builderExtensions [ fun builder -> builder.AddTrxReportProvider() ]
     }
     |> TestApplication.run argv

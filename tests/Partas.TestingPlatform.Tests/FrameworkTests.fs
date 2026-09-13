@@ -1,11 +1,15 @@
 module Partas.TestingPlatform.Tests.FrameworkTests
 
+#nowarn "57"
+
 open System.Collections.Generic
 open System.Threading.Tasks
 open Expecto
+open Microsoft.Testing.Platform.Capabilities.TestFramework
 open Microsoft.Testing.Platform.CommandLine
 open Microsoft.Testing.Platform.Extensions
 open Microsoft.Testing.Platform.Extensions.CommandLine
+open Microsoft.Testing.Platform.Extensions.TestFramework
 open Partas.TestingPlatform
 
 type private StubProvider() =
@@ -22,6 +26,9 @@ type private StubProvider() =
 
         member _.ValidateOptionArgumentsAsync(_, _) = ValidationResult.ValidTask
         member _.ValidateCommandLineOptionsAsync(_) = ValidationResult.ValidTask
+
+type private StubCapability() =
+    interface ITestFrameworkCapability
 
 [<Tests>]
 let tests =
@@ -44,5 +51,81 @@ let tests =
             Expect.isTrue
                 (obj.ReferenceEquals(definition.CommandLineOptionsProviders.[0], factory))
                 "same factory retained"
+        }
+    ]
+
+[<Tests>]
+let capabilitiesTests =
+    testList "FrameworkDefinition.capabilities" [
+        test "an empty definition carries no extra capabilities" {
+            Expect.isEmpty FrameworkDefinition.empty<int>.Capabilities "no capabilities by default"
+        }
+
+        test "the CE operation records the given capability factories" {
+            let factory () = StubCapability() :> ITestFrameworkCapability
+
+            let definition =
+                testFramework<int> {
+                    uid "x"
+                    capabilities [ factory ]
+                }
+
+            Expect.equal definition.Capabilities.Length 1 "one factory recorded"
+
+            Expect.isTrue
+                (obj.ReferenceEquals(definition.Capabilities.[0], factory))
+                "same factory retained"
+        }
+
+        test "FrameworkCapabilities exposes declared capabilities alongside the banner" {
+            let stub = StubCapability()
+
+            let definition =
+                { FrameworkDefinition.empty<int> with
+                    Banner = Some "hi"
+                    Capabilities = [ fun () -> stub :> ITestFrameworkCapability ] }
+
+            let capabilities = (FrameworkCapabilities definition :> ITestFrameworkCapabilities).Capabilities
+
+            Expect.equal capabilities.Count 2 "banner plus declared capability"
+            Expect.isTrue (capabilities |> Seq.exists (fun c -> c :? IBannerMessageOwnerCapability)) "banner present"
+            Expect.isTrue (capabilities |> Seq.exists (fun c -> obj.ReferenceEquals(c, stub))) "declared capability present"
+        }
+
+        test "FrameworkCapabilities omits the banner capability when none is declared" {
+            let stub = StubCapability()
+
+            let definition =
+                { FrameworkDefinition.empty<int> with
+                    Capabilities = [ fun () -> stub :> ITestFrameworkCapability ] }
+
+            let capabilities = (FrameworkCapabilities definition :> ITestFrameworkCapabilities).Capabilities
+
+            Expect.equal capabilities.Count 1 "only the declared capability"
+            Expect.isTrue (obj.ReferenceEquals(Seq.head capabilities, stub)) "declared capability present"
+        }
+    ]
+
+[<Tests>]
+let builderExtensionsTests =
+    testList "FrameworkDefinition.builderExtensions" [
+        test "an empty definition carries no builder extensions" {
+            Expect.isEmpty FrameworkDefinition.empty<int>.BuilderExtensions "no builder extensions by default"
+        }
+
+        test "the CE operation records the given builder extension actions" {
+            let action (_: Microsoft.Testing.Platform.Builder.ITestApplicationBuilder) = ()
+
+            let definition =
+                testFramework<int> {
+                    uid "x"
+                    builderExtensions [ action ]
+                }
+
+            Expect.equal definition.BuilderExtensions.Length 1 "one action recorded"
+
+            Expect.isTrue
+                (obj.ReferenceEquals(definition.BuilderExtensions.[0], action))
+                "same action retained"
         }
     ]

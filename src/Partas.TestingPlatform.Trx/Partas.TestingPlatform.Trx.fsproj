@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>$(PartasTargetFrameworks)</TargetFrameworks>
+        <LangVersion>latest</LangVersion>
+        <PackageId>Partas.TestingPlatform.Trx</PackageId>
+        <Title>Partas.TestingPlatform.Trx</Title>
+        <Description>Adds TRX report capability to Partas.TestingPlatform without the core binding taking a Microsoft.Testing.Extensions.TrxReport dependency.</Description>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="TrxReport.fs"/>
+        <None Include="../../README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Testing.Extensions.TrxReport.Abstractions" Version="[2.4.0,3.0.0)" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../Partas.TestingPlatform/Partas.TestingPlatform.fsproj"/>
+    </ItemGroup>
+
+</Project>

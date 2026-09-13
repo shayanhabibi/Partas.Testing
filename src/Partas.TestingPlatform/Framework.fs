@@ -41,7 +41,19 @@ type FrameworkDefinition<'T> =
       /// Factories for MTP command-line option providers, declared to the platform alongside
       /// the framework so custom options survive MTP's unrecognised-option rejection.
       /// </summary>
-      CommandLineOptionsProviders: (unit -> ICommandLineOptionsProvider) list }
+      CommandLineOptionsProviders: (unit -> ICommandLineOptionsProvider) list
+      /// <summary>
+      /// Factories for capabilities registered alongside the banner capability, letting a
+      /// companion package (e.g. TRX reporting) contribute one without core binding taking
+      /// its dependency.
+      /// </summary>
+      Capabilities: (unit -> ITestFrameworkCapability) list
+      /// <summary>
+      /// Actions run on the builder before it builds, for extension methods a companion
+      /// package registers onto <c>ITestApplicationBuilder</c> itself (e.g. TRX's report
+      /// writer). Runs at build time only; the running framework never sees the builder.
+      /// </summary>
+      BuilderExtensions: (ITestApplicationBuilder -> unit) list }
 
 type private BannerCapability(message: string) =
     interface IBannerMessageOwnerCapability with
@@ -50,9 +62,13 @@ type private BannerCapability(message: string) =
 type FrameworkCapabilities<'T>(definition: FrameworkDefinition<'T>) =
     interface ITestFrameworkCapabilities with
         member _.Capabilities =
-            match definition.Banner with
-            | Some message -> [| BannerCapability message :> ITestFrameworkCapability |]
-            | None -> Array.empty
+            let banner =
+                definition.Banner
+                |> Option.map (fun message -> BannerCapability message :> ITestFrameworkCapability)
+                |> Option.toList
+
+            (banner @ List.map (fun factory -> factory ()) definition.Capabilities)
+            |> Array.ofList
             :> IReadOnlyCollection<_>
 
 type Framework<'T>(definition: FrameworkDefinition<'T>) =
@@ -128,7 +144,9 @@ module FrameworkDefinition =
           Banner = None
           BuildTree = fun () -> Group("", None, [], [])
           RunTests = fun _ -> Task.CompletedTask
-          CommandLineOptionsProviders = [] }
+          CommandLineOptionsProviders = []
+          Capabilities = []
+          BuilderExtensions = [] }
 
 type TestFrameworkBuilder<'T>() =
     member _.Yield(_: unit) = FrameworkDefinition.empty<'T>
@@ -158,6 +176,16 @@ type TestFrameworkBuilder<'T>() =
     [<CustomOperation "commandLineOptions">]
     member _.CommandLineOptions(definition: FrameworkDefinition<'T>, providers) =
         { definition with CommandLineOptionsProviders = providers }
+
+    /// <summary>Declares capability factories, replacing any previously declared.</summary>
+    [<CustomOperation "capabilities">]
+    member _.Capabilities(definition: FrameworkDefinition<'T>, factories) =
+        { definition with Capabilities = factories }
+
+    /// <summary>Declares builder extension actions, replacing any previously declared.</summary>
+    [<CustomOperation "builderExtensions">]
+    member _.BuilderExtensions(definition: FrameworkDefinition<'T>, actions) =
+        { definition with BuilderExtensions = actions }
 
 [<AutoOpen>]
 module Builders =
@@ -193,6 +221,9 @@ module TestApplication =
 
             for factory in definition.CommandLineOptionsProviders do
                 builder.CommandLine.AddProvider(fun () -> factory ())
+
+            for extend in definition.BuilderExtensions do
+                extend builder
 
             use! app = builder.BuildAsync()
             return! app.RunAsync()
