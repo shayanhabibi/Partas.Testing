@@ -3,33 +3,9 @@ module Partas.TestingPlatform.Tests.TestTreeTests
 open Expecto
 open FsCheck
 open Partas.TestingPlatform
+open Partas.TestingPlatform.Tests.Generators
 
 let private leaf name = Leaf(name, None, [], ())
-
-/// <summary>Names spanning the plain case, the separator, the escape character, and both together.</summary>
-let private nameGen = Gen.elements [ "a"; "b"; "c"; "a/b"; @"a\b"; @"a\/b"; "" ]
-
-let private treeGen =
-    let rec go size =
-        gen {
-            let! name = nameGen
-
-            if size <= 1 then
-                return Leaf(name, None, [], ())
-            else
-                let! count = Gen.choose (0, 3)
-                let! children = Gen.listOfLength count (go (size / (count + 1)))
-                return Group(name, None, [], children)
-        }
-
-    Gen.sized go
-
-let private arbTree = Arb.fromGen treeGen
-
-let rec private uidsOf =
-    function
-    | ResolvedLeaf(node, ()) -> [ node.Uid ]
-    | ResolvedGroup(node, children) -> node.Uid :: List.collect uidsOf children
 
 let rec private leavesOf =
     function
