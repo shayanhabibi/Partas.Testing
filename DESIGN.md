@@ -409,5 +409,6 @@ deepen together, which is what makes the consumer-driven rule in §1 enforceable
 | 36 | retry modelled, orchestrated by the framework |
 | 37 | vertical slice |
 | 38 | ancestors published up front |
-| 39 | Expecto and FsCheck, standalone runner |
+| 39 | Expecto and FsCheck, hosted by the VSTest adapter so one `dotnet test` runs every suite |
 | 40 | housekeeping commit first |
+| 41 | a leaf-property contribution seam, so a companion package supplies the properties its writer requires |
