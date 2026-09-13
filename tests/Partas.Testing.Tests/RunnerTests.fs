@@ -9,6 +9,9 @@ let private noop () = ()
 
 let private stateAt (states: Map<string, TestNodeStateProperty>) uid = states.[uid]
 
+let private assertionAt (updates: Map<string, TestNodeUpdateMessage>) uid =
+    updates.[uid].TestNode.Properties.OfType<AssertionFailureProperty>() |> Array.tryHead
+
 [<Tests>]
 let tests =
     testList "Runner.run" [
@@ -82,6 +85,25 @@ let tests =
             let states = runSuite true tree
 
             Expect.isTrue (stateAt states "/s/b" :? PassedTestNodeStateProperty) "the unfocused test runs"
+        }
+
+        test "a body raising AssertionException is reported failed, carrying the assertion" {
+            let raised = AssertionException("parses an int", Some "1", Some "2")
+
+            let updates =
+                runSuiteUpdates false (Test.list ("s", [ Test.case ("a", fun () -> raise raised) ]))
+                |> terminalUpdates
+
+            match updates.["/s/a"].TestNode.Properties.OfType<TestNodeStateProperty>() |> Array.tryHead with
+            | Some(:? FailedTestNodeStateProperty as failed) ->
+                Expect.equal failed.Exception raised "the exception"
+            | other -> failtestf "expected failed, got %A" other
+
+            match assertionAt updates "/s/a" with
+            | Some assertion ->
+                Expect.equal assertion.Expected "1" "expected"
+                Expect.equal assertion.Actual "2" "actual"
+            | None -> failtest "expected an assertion failure property"
         }
 
         test "every admitted leaf reaches a terminal state" {

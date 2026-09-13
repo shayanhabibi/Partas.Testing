@@ -37,8 +37,8 @@ type StubProducer() =
         member _.Description = "stub"
         member _.IsEnabledAsync() = Task.FromResult true
 
-/// <summary>Runs a suite through the runner and returns the terminal state of every leaf.</summary>
-let runSuite filterApplied tree =
+/// <summary>Runs a suite through the runner and returns every message the run published.</summary>
+let runSuiteUpdates filterApplied tree =
     let resolved =
         match TestTree.resolve tree with
         | Ok resolved -> resolved
@@ -56,11 +56,22 @@ let runSuite filterApplied tree =
     (Runner.run context).GetAwaiter().GetResult()
 
     bus.Updates
-    |> List.choose (fun update ->
+
+/// <summary>The terminal, non-<c>InProgress</c> update published for a leaf, by uid.</summary>
+let terminalUpdates updates =
+    updates
+    |> List.choose (fun (update: TestNodeUpdateMessage) ->
         let states: TestNodeStateProperty[] = update.TestNode.Properties.OfType()
 
         match Array.tryHead states with
-        | Some state when not (state :? InProgressTestNodeStateProperty) ->
-            Some(update.TestNode.Uid.Value, state)
+        | Some state when not (state :? InProgressTestNodeStateProperty) -> Some(update.TestNode.Uid.Value, update)
         | _ -> None)
     |> Map.ofList
+
+/// <summary>Runs a suite through the runner and returns the terminal state of every leaf.</summary>
+let runSuite filterApplied tree =
+    runSuiteUpdates filterApplied tree
+    |> terminalUpdates
+    |> Map.map (fun _ update ->
+        let states: TestNodeStateProperty[] = update.TestNode.Properties.OfType()
+        states.[0])

@@ -10,6 +10,7 @@
 
     <ItemGroup>
         <Compile Include="Dsl.fs"/>
+        <Compile Include="Expect.fs"/>
         <Compile Include="Focus.fs"/>
         <Compile Include="Runner.fs"/>
         <Compile Include="Entry.fs"/>

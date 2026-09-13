@@ -17,7 +17,10 @@ module Runner =
                 try
                     do! Async.StartAsTask(leaf.Payload, cancellationToken = context.CancellationToken)
                     return TestResult.create Passed
-                with error ->
+                with
+                | AssertionException(_, expected, actual) as error ->
+                    return TestResult.create (Failed(Some error, Some { Expected = expected; Actual = actual }))
+                | error ->
                     return TestResult.create (Failed(Some error, None))
             }
 
