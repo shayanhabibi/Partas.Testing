@@ -27,30 +27,34 @@ module Runner =
             | AssertionException(_, expected, actual) -> Failed(Some error, Some { Expected = expected; Actual = actual })
             | _ -> Failed(Some error, None)
 
-        /// <summary>
-        /// The result for a raised error. Cancellation of the session token reports `Skipped`;
-        /// any other exception, including a test's own `OperationCanceledException`, reports
-        /// `Failed`.
-        /// </summary>
-        let resultOf (error: exn) =
-            match error with
-            | :? OperationCanceledException when context.CancellationToken.IsCancellationRequested ->
-                { TestResult.create Skipped with Explanation = Some "the session was cancelled" }
-            | _ -> TestResult.create (outcomeOf error)
-
-        let execute (leaf: ExecutableLeaf<TestBody>) _ =
-            task {
-                try
-                    do! Async.StartAsTask(leaf.Payload, cancellationToken = context.CancellationToken)
-                    return TestResult.create Passed
-                with error ->
-                    return resultOf error
-            }
-
-        let settled result _ = Task.FromResult result
+        let cancelled = "the session was cancelled"
 
         let skipped reason =
             { TestResult.create Skipped with Explanation = Some reason }
+
+        /// <summary>
+        /// The result for a raised error, given whether the task the runtime built for it ended
+        /// in the `Canceled` state. That state reports the raise as caused by the token passed to
+        /// the task — the session's own cancellation — and reports `Skipped`. A task that instead
+        /// ends `Faulted` reports `Failed`, whatever exception it carries, including an
+        /// `OperationCanceledException` a body raised through its own logic while racing the
+        /// session's cancellation.
+        /// </summary>
+        let resultOf (wasCanceled: bool) (error: exn) =
+            if wasCanceled then skipped cancelled else TestResult.create (outcomeOf error)
+
+        let execute (leaf: ExecutableLeaf<TestBody>) _ =
+            task {
+                let running = Async.StartAsTask(leaf.Payload, cancellationToken = context.CancellationToken)
+
+                try
+                    do! running
+                    return TestResult.create Passed
+                with error ->
+                    return resultOf running.IsCanceled error
+            }
+
+        let settled result _ = Task.FromResult result
 
         let report (leaf: ExecutableLeaf<TestBody>) body =
             task {
@@ -69,11 +73,13 @@ module Runner =
 
         let attempt (cancellation: CancellationToken) (work: Async<unit>) =
             task {
+                let running = Async.StartAsTask(work, cancellationToken = cancellation)
+
                 try
-                    do! Async.StartAsTask(work, cancellationToken = cancellation)
+                    do! running
                     return None
                 with error ->
-                    return Some error
+                    return Some(running.IsCanceled, error)
             }
 
         let rec walk (parent: string option) (blocked: string option) tree =
@@ -83,10 +89,14 @@ module Runner =
                     let leaf = { Node = node; Parent = parent; Payload = payload }
 
                     // A leaf deactivated in source keeps its own reason, so a stray focus or
-                    // pending mark stays legible under a group whose setup failed.
+                    // pending mark stays legible under a group whose setup failed. A session
+                    // already cancelled before this leaf starts skips it outright, rather than
+                    // starting a body only to have the runtime refuse to run it.
                     match Map.tryFind node.Uid plan, blocked with
                     | Some(TestPlan.Skip reason), _ -> do! report leaf (settled (skipped reason))
                     | _, Some reason -> do! report leaf (settled (skipped reason))
+                    | _, None when context.CancellationToken.IsCancellationRequested ->
+                        do! report leaf (settled (skipped cancelled))
                     | _, None -> do! report leaf (execute leaf)
                 | ResolvedGroup(node, children) ->
                     let descend blocking =
@@ -101,18 +111,22 @@ module Runner =
                         // the reporter reads its node and parent.
                         let group = { Node = node; Parent = parent; Payload = async.Zero() }
 
-                        match! attempt context.CancellationToken (fixture.Setup()) with
-                        | Some error ->
-                            do! report group (settled (resultOf error))
-                            do! descend (Some $"the setup of {node.Uid} failed")
-                        | None ->
-                            do! descend None
+                        if context.CancellationToken.IsCancellationRequested then
+                            do! report group (settled (skipped cancelled))
+                            do! descend (Some cancelled)
+                        else
+                            match! attempt context.CancellationToken (fixture.Setup()) with
+                            | Some(wasCanceled, error) ->
+                                do! report group (settled (resultOf wasCanceled error))
+                                do! descend (Some $"the setup of {node.Uid} failed")
+                            | None ->
+                                do! descend None
 
-                            // Teardown runs outside the session's cancellation, so a cancelled
-                            // run still releases what setup acquired.
-                            match! attempt CancellationToken.None (fixture.Teardown()) with
-                            | Some error -> do! report group (settled (TestResult.create (outcomeOf error)))
-                            | None -> ()
+                                // Teardown runs outside the session's cancellation, so a
+                                // cancelled run still releases what setup acquired.
+                                match! attempt CancellationToken.None (fixture.Teardown()) with
+                                | Some(_, error) -> do! report group (settled (TestResult.create (outcomeOf error)))
+                                | None -> ()
                     | _ -> do! descend blocked
             }
 

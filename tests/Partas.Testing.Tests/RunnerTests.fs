@@ -132,6 +132,43 @@ let tests =
             Expect.isTrue (stateAt states "/s/a" :? FailedTestNodeStateProperty) "failed, not skipped"
         }
 
+        test "a leaf after the session is cancelled by an earlier leaf reports skipped without running its body" {
+            let log = ResizeArray<string>()
+            use cts = new CancellationTokenSource()
+
+            let b =
+                async {
+                    log.Add "b ran"
+                    raise (OperationCanceledException "b's own timeout")
+                }
+
+            let tree =
+                Test.list "s" [ Test.case "a" (fun () -> cts.Cancel()); Test.caseAsync "b" b ]
+
+            let states = runSuiteUnder cts.Token false tree
+
+            Expect.isEmpty (List.ofSeq log) "b's body never ran once the session was cancelled"
+            Expect.isTrue (stateAt states "/s/b" :? SkippedTestNodeStateProperty) "skipped, not failed"
+        }
+
+        test "a leaf that cancels the session and then raises its own reason is still reported failed" {
+            use cts = new CancellationTokenSource()
+
+            // No `do!` between the two statements: the cancellation and the raise happen in
+            // the same synchronous step, so the token is already cancelled by the time the
+            // exception is caught, yet this leaf's own logic — not the session — raised it.
+            let body =
+                async {
+                    cts.Cancel()
+                    raise (OperationCanceledException "own reasons, mid-flight")
+                }
+
+            let states =
+                runSuiteUnder cts.Token false (Test.list "s" [ Test.caseAsync "a" body ])
+
+            Expect.isTrue (stateAt states "/s/a" :? FailedTestNodeStateProperty) "failed, not skipped"
+        }
+
         test "every admitted leaf reaches a terminal state" {
             let tree =
                 Test.list "s" [
