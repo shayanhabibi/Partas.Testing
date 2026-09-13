@@ -57,7 +57,7 @@ type Framework<'T>(definition: FrameworkDefinition<'T>) =
         member _.DataTypesProduced = [| typeof<TestNodeUpdateMessage> |]
 
     interface ITestFramework with
-        member this.CreateTestSessionAsync(_) =
+        member this.CreateTestSessionAsync _ =
             resolved <- Session.resolveTree definition.BuildTree
 
             match resolved with
@@ -66,7 +66,7 @@ type Framework<'T>(definition: FrameworkDefinition<'T>) =
             |> SessionOutcome.toCreateResult
             |> Task.FromResult
 
-        member _.CloseTestSessionAsync(_) =
+        member _.CloseTestSessionAsync _ =
             SessionOutcome.Succeeded None |> SessionOutcome.toCloseResult |> Task.FromResult
 
         member this.ExecuteRequestAsync(context) =
@@ -142,7 +142,7 @@ module Builders =
 module TestApplication =
 
     /// <summary>
-    /// Runs <paramref name="definition"/> as a test application, returning the process exit code.
+    /// Runs the definition as a test application, returning the process exit code.
     /// </summary>
     let run (argv: string[]) (definition: FrameworkDefinition<'T>) =
         if String.IsNullOrWhiteSpace definition.Uid then

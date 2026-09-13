@@ -5,9 +5,9 @@ open Microsoft.Testing.Platform.Extensions.Messages
 module internal Nodes =
 
     /// <summary>
-    /// A platform node carrying <paramref name="state"/>, the node's file location, and the
-    /// node's own properties. A node given no state is a group in the server protocol and is
-    /// excluded from the platform's test counts.
+    /// A platform node carrying the given state, the node's file location, and the node's own
+    /// properties. A node with no state is a group in the server protocol and is excluded from
+    /// the platform's test counts.
     /// </summary>
     let toTestNode (state: IProperty option) (node: ResolvedNode) =
         let properties =

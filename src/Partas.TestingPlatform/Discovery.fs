@@ -8,8 +8,8 @@ open Microsoft.Testing.Platform.TestHost
 module Discovery =
 
     /// <summary>
-    /// Publishes every node of <paramref name="tree"/>, each linked to its parent, in an order
-    /// placing a parent before its children.
+    /// Publishes every node of the tree, each linked to its parent, in an order placing a
+    /// parent before its children. Leaves carry the discovered state; groups carry none.
     /// </summary>
     let publish
         (bus: IMessageBus)

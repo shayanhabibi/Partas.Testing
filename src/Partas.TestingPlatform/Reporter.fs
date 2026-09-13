@@ -14,9 +14,8 @@ open Microsoft.Testing.Platform.TestHost
 type Reporter(bus: IMessageBus, producer: IDataProducer, session: SessionUid) =
 
     /// <summary>
-    /// Publishes <paramref name="leaf"/> as in progress, runs <paramref name="body"/>, then
-    /// publishes its result with the elapsed timing. A <paramref name="body"/> that raises is
-    /// published as errored and returned as such.
+    /// Publishes the leaf as in progress, runs the body, then publishes its result with the
+    /// elapsed timing. A body that raises is published as errored and returned as such.
     /// </summary>
     member _.Run(leaf: ExecutableLeaf<'T>, body: CancellationToken -> Task<TestResult>, cancellation: CancellationToken) : Task<TestResult> =
         let parent = leaf.Parent |> Option.map TestNodeUid |> Option.toObj
