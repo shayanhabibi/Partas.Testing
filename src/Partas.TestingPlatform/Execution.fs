@@ -51,7 +51,7 @@ module Execution =
         (tree: ResolvedTestTree<'T>)
         : Task =
         let send node (parent: TestNodeUid) =
-            let testNode = Nodes.toTestNode DiscoveredTestNodeStateProperty.CachedInstance node
+            let testNode = Nodes.toTestNode None node
             bus.PublishAsync(producer, TestNodeUpdateMessage(session, testNode, parent))
 
         let rec go parent tree =

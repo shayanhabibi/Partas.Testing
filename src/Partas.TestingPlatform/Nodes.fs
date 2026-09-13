@@ -6,10 +6,14 @@ module internal Nodes =
 
     /// <summary>
     /// A platform node carrying <paramref name="state"/>, the node's file location, and the
-    /// node's own properties.
+    /// node's own properties. A node given no state is a group in the server protocol and is
+    /// excluded from the platform's test counts.
     /// </summary>
-    let toTestNode (state: IProperty) (node: ResolvedNode) =
-        let properties = PropertyBag(state)
+    let toTestNode (state: IProperty option) (node: ResolvedNode) =
+        let properties =
+            match state with
+            | Some state -> PropertyBag(state)
+            | None -> PropertyBag()
 
         node.Location
         |> Option.iter (fun location ->

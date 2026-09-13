@@ -22,7 +22,7 @@ type Reporter(bus: IMessageBus, producer: IDataProducer, session: SessionUid) =
         let parent = leaf.Parent |> Option.map TestNodeUid |> Option.toObj
 
         let send (properties: IProperty list) =
-            let testNode = Nodes.toTestNode (List.head properties) leaf.Node
+            let testNode = Nodes.toTestNode (Some(List.head properties)) leaf.Node
             properties |> List.tail |> List.iter testNode.Properties.Add
             bus.PublishAsync(producer, TestNodeUpdateMessage(session, testNode, parent))
 

@@ -54,13 +54,24 @@ let tests =
             Expect.equal parents [ None; Some "/parser"; Some "/parser" ] "parent links"
         }
 
-        test "every published node carries the discovered state" {
+        test "a published leaf carries the discovered state" {
             let updates = discover (Group("parser", None, [], [ Leaf("a", None, [], ()) ]))
+            let leaf = updates |> List.find (fun update -> uidOf update = "/parser/a")
 
-            for update in updates do
-                Expect.isTrue
-                    (update.TestNode.Properties.Any<DiscoveredTestNodeStateProperty>())
-                    $"discovered state on {update.TestNode.Uid.Value}"
+            Expect.isTrue
+                (leaf.TestNode.Properties.Any<DiscoveredTestNodeStateProperty>())
+                "discovered state on the leaf"
+        }
+
+        // A node carrying an execution state is an action in the server protocol, and the
+        // platform counts it as a test. A group carries none, so it is a group node.
+        test "a published group carries no state" {
+            let updates = discover (Group("parser", None, [], [ Leaf("a", None, [], ()) ]))
+            let group = updates |> List.find (fun update -> uidOf update = "/parser")
+
+            Expect.isFalse
+                (group.TestNode.Properties.Any<TestNodeStateProperty>())
+                "no state on the group"
         }
 
         test "a captured location is published as a file location" {

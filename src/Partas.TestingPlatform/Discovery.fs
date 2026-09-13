@@ -17,16 +17,18 @@ module Discovery =
         (session: SessionUid)
         (tree: ResolvedTestTree<'T>)
         : Task =
-        let send node (parent: TestNodeUid) =
-            let testNode = Nodes.toTestNode DiscoveredTestNodeStateProperty.CachedInstance node
+        let send state node (parent: TestNodeUid) =
+            let testNode = Nodes.toTestNode state node
             bus.PublishAsync(producer, TestNodeUpdateMessage(session, testNode, parent))
+
+        let discovered = Some(DiscoveredTestNodeStateProperty.CachedInstance :> IProperty)
 
         let rec go parent tree =
             task {
                 match tree with
-                | ResolvedLeaf(node, _) -> do! send node parent
+                | ResolvedLeaf(node, _) -> do! send discovered node parent
                 | ResolvedGroup(node, children) ->
-                    do! send node parent
+                    do! send None node parent
 
                     for child in children do
                         do! go (TestNodeUid node.Uid) child

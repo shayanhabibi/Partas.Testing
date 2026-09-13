@@ -136,9 +136,13 @@ package is in play.
 
 ## 5. Discovery
 
-The binding walks the resolved tree and publishes every node. Groups carry
-`DiscoveredTestNodeStateProperty`; leaves carry it too. Parent links come from
+The binding walks the resolved tree and publishes every node. Parent links come from
 `TestNodeUpdateMessage(sessionUid, node, parentUid)`.
+
+Leaves carry `DiscoveredTestNodeStateProperty`. **Groups carry no state property.** A node
+carrying an execution state is an `action` in the server protocol and the platform counts it
+as a test; a node carrying none is a `group`. Publishing a group with a state inflates
+`--list-tests` by the number of groups while the run summary counts only leaves.
 
 Each node carries `TestFileLocationProperty` when a location was captured.
 
@@ -162,8 +166,9 @@ leaves that passed the filter, and only those. Ancestors precede descendants, so
 `parentTestNodeUid` ever references an unpublished node.
 
 Groups carry a state property only when they have an outcome of their own. A group whose
-setup fails reports `Failed`, and its children report `Skipped` naming the group's UID.
-Ordinary groups remain at `Discovered`, so totals count leaves exactly.
+setup fails reports `Failed`, and its children report `Skipped` naming the group's UID. That
+group becomes an `action` and joins the counts, which is the intent — a setup failure is a
+failure. Ordinary groups carry no state, so totals count leaves exactly.
 
 `ExecuteRequestContext.Complete()` runs in a `try/finally` around the whole request. A tree
 that fails to construct or resolve reports through `SessionOutcome.Failed` rather than through
@@ -301,7 +306,7 @@ deepen together, which is what makes the consumer-driven rule in §1 enforceable
 | 10 | CE over an internal handler record |
 | 11 | `/`-joined paths; loud collisions |
 | 12 | materialized, resolved once, cached |
-| 13 | groups are nodes; state only with an outcome; UID equals filter path |
+| 13 | groups are nodes carrying no state; state only with an outcome; UID equals filter path |
 | 14 | no `TestMethodIdentifierProperty` |
 | 15 | typed outcome DU, typed assertion failure, `ExtraProperties` escape hatch |
 | 16 | binding interprets filters, exposes a predicate, auto-registers services |

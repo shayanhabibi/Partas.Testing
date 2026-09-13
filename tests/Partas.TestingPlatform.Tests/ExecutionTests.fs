@@ -78,14 +78,14 @@ let tests =
                 "groups only, parent first"
         }
 
-        test "a published group carries the discovered state" {
+        test "a published group carries no state" {
             let bus = RecordingMessageBus()
             (Execution.publishGroups bus (StubProducer()) session (resolved fixture)).GetAwaiter().GetResult()
 
             for update in bus.Updates do
-                Expect.isTrue
-                    (update.TestNode.Properties.Any<DiscoveredTestNodeStateProperty>())
-                    $"discovered state on {update.TestNode.Uid.Value}"
+                Expect.isFalse
+                    (update.TestNode.Properties.Any<TestNodeStateProperty>())
+                    $"no state on {update.TestNode.Uid.Value}"
         }
 
         testProperty "pruning keeps exactly the admitted leaves"
