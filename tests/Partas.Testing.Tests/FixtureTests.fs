@@ -112,6 +112,20 @@ let tests =
             Expect.isFalse (states.ContainsKey "/s") "the group carries no failure of its own"
         }
 
+        test "setup cancelled on the session token reports the group skipped, not failed" {
+            use source = new CancellationTokenSource()
+            source.Cancel()
+
+            let tree =
+                Test.listWith ("s", (fun () -> async { do! Async.Sleep 1000 }), (fun _ -> idle ()))
+                    (fun _ -> [ Test.case "a" noop ])
+
+            let states = runSuiteUnder source.Token false tree
+
+            Expect.isTrue (states.["/s"] :? SkippedTestNodeStateProperty) "skipped, not failed"
+            Expect.isTrue ((states.["/s"]).Explanation.Contains "cancel") "the explanation names cancellation"
+        }
+
         test "a pending leaf under a failed setup keeps its own reason" {
             let tree =
                 Test.listWith (

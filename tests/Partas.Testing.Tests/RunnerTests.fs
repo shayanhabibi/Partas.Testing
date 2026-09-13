@@ -1,5 +1,7 @@
 module Partas.Testing.Tests.RunnerTests
 
+open System
+open System.Threading
 open Microsoft.Testing.Platform.Extensions.Messages
 open Partas.Testing
 open Expecto
@@ -104,6 +106,30 @@ let tests =
                 Expect.equal assertion.Expected "1" "expected"
                 Expect.equal assertion.Actual "2" "actual"
             | None -> failtest "expected an assertion failure property"
+        }
+
+        test "a body cancelled on the session token is reported skipped, naming cancellation" {
+            use cts = new CancellationTokenSource()
+            cts.Cancel()
+
+            let body = async { do! Async.Sleep 1000 }
+
+            let states =
+                runSuiteUnder cts.Token false (Test.list "s" [ Test.caseAsync "a" body ])
+
+            Expect.isTrue (stateAt states "/s/a" :? SkippedTestNodeStateProperty) "skipped, not failed"
+            Expect.isTrue
+                ((stateAt states "/s/a").Explanation.Contains "cancel")
+                "the explanation names cancellation"
+        }
+
+        test "an OperationCanceledException the test raises for its own reasons is reported failed" {
+            let body = async { raise (OperationCanceledException "own reasons") }
+
+            let states =
+                runSuiteUnder CancellationToken.None false (Test.list "s" [ Test.caseAsync "a" body ])
+
+            Expect.isTrue (stateAt states "/s/a" :? FailedTestNodeStateProperty) "failed, not skipped"
         }
 
         test "every admitted leaf reaches a terminal state" {

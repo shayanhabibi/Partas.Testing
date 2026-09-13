@@ -166,9 +166,10 @@ leaves that passed the filter, and only those. Ancestors precede descendants, so
 `parentTestNodeUid` ever references an unpublished node.
 
 Groups carry a state property only when they have an outcome of their own. A group whose
-setup fails reports `Failed`, and its children report `Skipped` naming the group's UID. That
-group becomes an `action` and joins the counts, which is the intent — a setup failure is a
-failure. Ordinary groups carry no state, so totals count leaves exactly.
+setup fails reports `Failed`. Its children report `Skipped`, naming their own source-deactivated
+reason where one applies (§7) and the group's UID otherwise. That group becomes an `action` and
+joins the counts, which is the intent — a setup failure is a failure. Ordinary groups carry no
+state, so totals count leaves exactly.
 
 `ExecuteRequestContext.Complete()` runs in a `try/finally` around the whole request. A tree
 that fails to construct or resolve reports through `SessionOutcome.Failed` rather than through

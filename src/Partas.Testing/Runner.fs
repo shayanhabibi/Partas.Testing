@@ -1,5 +1,6 @@
 namespace Partas.Testing
 
+open System
 open System.Threading
 open System.Threading.Tasks
 open Partas.TestingPlatform
@@ -26,13 +27,24 @@ module Runner =
             | AssertionException(_, expected, actual) -> Failed(Some error, Some { Expected = expected; Actual = actual })
             | _ -> Failed(Some error, None)
 
+        /// <summary>
+        /// The result for a raised error. Cancellation of the session token reports `Skipped`;
+        /// any other exception, including a test's own `OperationCanceledException`, reports
+        /// `Failed`.
+        /// </summary>
+        let resultOf (error: exn) =
+            match error with
+            | :? OperationCanceledException when context.CancellationToken.IsCancellationRequested ->
+                { TestResult.create Skipped with Explanation = Some "the session was cancelled" }
+            | _ -> TestResult.create (outcomeOf error)
+
         let execute (leaf: ExecutableLeaf<TestBody>) _ =
             task {
                 try
                     do! Async.StartAsTask(leaf.Payload, cancellationToken = context.CancellationToken)
                     return TestResult.create Passed
                 with error ->
-                    return TestResult.create (outcomeOf error)
+                    return resultOf error
             }
 
         let settled result _ = Task.FromResult result
@@ -91,7 +103,7 @@ module Runner =
 
                         match! attempt context.CancellationToken (fixture.Setup()) with
                         | Some error ->
-                            do! report group (settled (TestResult.create (outcomeOf error)))
+                            do! report group (settled (resultOf error))
                             do! descend (Some $"the setup of {node.Uid} failed")
                         | None ->
                             do! descend None
