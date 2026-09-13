@@ -1,0 +1,33 @@
+<Solution>
+  <Folder Name="/.environment/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <!--#if (HasTools) -->
+    <File Path=".config/dotnet-tools.json" />
+    <!--#endif -->
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Build.targets" />
+    <File Path="README.md" />
+    <!--#endif -->
+  </Folder>
+  <Folder Name="/Build/">
+    <!--#if (BuildScript) -->
+    <File Path="build.fsx" />
+    <!--#endif -->
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Partas.TestingPlatform/Partas.TestingPlatform.fsproj" />
+    <Project Path="src/Partas.Testing/Partas.Testing.fsproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Partas.Testing.Tests/Partas.Testing.Tests.fsproj" />
+  </Folder>
+  <!--#if (!Docs_none) -->
+  <Folder Name="/docs/">
+    <!--#endif -->
+    <!--#if (Docs_nacara) -->
+    <Project Path="docs/docs.fsproj" />
+    <!--#endif -->
+  </Folder>
+  <!--#endif -->
+</Solution>

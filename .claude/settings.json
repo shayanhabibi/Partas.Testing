@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__fslangmcp"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "fslangmcp"
+  ],
+  "enabledPlugins": {
+    "comment-hygiene@roboz0r": true
+  }
+}

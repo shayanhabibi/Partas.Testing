@@ -1,0 +1,10 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+# IDE and tool-local state
+.idea/
+*.DotSettings.user
+.serena/
+.claude/.headroom_wrap_marker.json
