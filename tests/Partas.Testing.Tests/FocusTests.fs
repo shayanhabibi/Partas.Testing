@@ -1,8 +1,8 @@
 module Partas.Testing.Tests.FocusTests
 
-open Expecto
 open Partas.Testing
 open Partas.TestingPlatform
+open Expecto
 
 let private noop () = ()
 

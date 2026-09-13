@@ -1,8 +1,8 @@
 module Partas.Testing.Tests.DslTests
 
-open Expecto
 open Partas.Testing
 open Partas.TestingPlatform
+open Expecto
 
 [<Tests>]
 let tests =

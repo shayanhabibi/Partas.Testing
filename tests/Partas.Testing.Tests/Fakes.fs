@@ -37,8 +37,11 @@ type StubProducer() =
         member _.Description = "stub"
         member _.IsEnabledAsync() = Task.FromResult true
 
-/// <summary>Runs a suite through the runner and returns every message the run published.</summary>
-let runSuiteUpdates filterApplied tree =
+/// <summary>
+/// Runs a suite through the runner under the given session cancellation, and returns every
+/// message the run published.
+/// </summary>
+let runSuiteUpdatesUnder (cancellation: CancellationToken) filterApplied tree =
     let resolved =
         match TestTree.resolve tree with
         | Ok resolved -> resolved
@@ -50,12 +53,16 @@ let runSuiteUpdates filterApplied tree =
         { Tree = resolved
           Leaves = Execution.leaves resolved
           Reporter = Reporter(bus, StubProducer(), SessionUid "session")
-          CancellationToken = CancellationToken.None
+          CancellationToken = cancellation
           FilterApplied = filterApplied }
 
     (Runner.run context).GetAwaiter().GetResult()
 
     bus.Updates
+
+/// <summary>Runs a suite through the runner and returns every message the run published.</summary>
+let runSuiteUpdates filterApplied tree =
+    runSuiteUpdatesUnder CancellationToken.None filterApplied tree
 
 /// <summary>The terminal, non-<c>InProgress</c> update published for a leaf, by uid.</summary>
 let terminalUpdates updates =
@@ -69,9 +76,13 @@ let terminalUpdates updates =
     |> Map.ofList
 
 /// <summary>Runs a suite through the runner and returns the terminal state of every leaf.</summary>
-let runSuite filterApplied tree =
-    runSuiteUpdates filterApplied tree
+let runSuiteUnder cancellation filterApplied tree =
+    runSuiteUpdatesUnder cancellation filterApplied tree
     |> terminalUpdates
     |> Map.map (fun _ update ->
         let states: TestNodeStateProperty[] = update.TestNode.Properties.OfType()
         states.[0])
+
+/// <summary>Runs a suite through the runner and returns the terminal state of every leaf.</summary>
+let runSuite filterApplied tree =
+    runSuiteUnder CancellationToken.None filterApplied tree

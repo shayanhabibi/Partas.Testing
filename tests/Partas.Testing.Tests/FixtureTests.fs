@@ -1,5 +1,6 @@
 module Partas.Testing.Tests.FixtureTests
 
+open System.Threading
 open Partas.Testing
 open Expecto
 open Microsoft.Testing.Platform.Extensions.Messages
@@ -91,6 +92,54 @@ let tests =
 
             Expect.sequenceEqual (List.ofSeq log) [ "setup"; "b"; "teardown" ] "the order of the run"
             Expect.isTrue (states.["/s/a"] :? FailedTestNodeStateProperty) "the failing leaf"
+        }
+
+        test "teardown runs after the session is cancelled" {
+            let log = ResizeArray<string>()
+            use source = new CancellationTokenSource()
+
+            let tree =
+                Test.listWith (
+                    "s",
+                    (fun () -> async { log.Add "setup" }),
+                    (fun () -> async { log.Add "teardown" }),
+                    fun _ -> [ Test.case ("a", fun () -> source.Cancel()) ]
+                )
+
+            let states = runSuiteUnder source.Token false tree
+
+            Expect.sequenceEqual (List.ofSeq log) [ "setup"; "teardown" ] "teardown released the fixture"
+            Expect.isFalse (states.ContainsKey "/s") "the group carries no failure of its own"
+        }
+
+        test "a pending leaf under a failed setup keeps its own reason" {
+            let tree =
+                Test.listWith (
+                    "s",
+                    (fun () -> async { raise (exn "the setup raised") }),
+                    (fun _ -> idle ()),
+                    fun _ -> [ Test.pending ("dormant", noop); Test.case ("a", noop) ]
+                )
+
+            let states = runSuite false tree
+
+            Expect.equal (states.["/s/dormant"]).Explanation "pending" "the pending leaf keeps its reason"
+            Expect.stringContains (states.["/s/a"]).Explanation "/s" "the ordinary leaf names the group"
+        }
+
+        test "an unfocused leaf under a failed setup keeps its own reason" {
+            let tree =
+                Test.listWith (
+                    "s",
+                    (fun () -> async { raise (exn "the setup raised") }),
+                    (fun _ -> idle ()),
+                    fun _ -> [ Test.focused ("chosen", noop); Test.case ("passed over", noop) ]
+                )
+
+            let states = runSuite false tree
+
+            Expect.equal (states.["/s/passed over"]).Explanation "not focused" "the unfocused leaf keeps its reason"
+            Expect.stringContains (states.["/s/chosen"]).Explanation "/s" "the focused leaf names the group"
         }
 
         test "a fixture group that succeeds reports no state of its own" {

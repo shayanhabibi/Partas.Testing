@@ -120,8 +120,10 @@ type Test =
         Group(name, locate file line, [], children)
 
     /// <summary>
-    /// A group owning a fixture. Setup runs once before the group's first leaf and teardown once
-    /// after its last, and the children read the value through the handle they were built with.
+    /// A group owning a fixture. Setup runs once before the group's first leaf, and the children
+    /// read the value through the handle they were built with. Teardown runs once after the
+    /// group's last leaf, and runs when setup produced a value: a setup that raises part way
+    /// leaves teardown unrun.
     /// </summary>
     static member listWith
         (

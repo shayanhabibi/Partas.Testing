@@ -1,5 +1,6 @@
 namespace Partas.Testing
 
+open System.Threading
 open System.Threading.Tasks
 open Partas.TestingPlatform
 
@@ -54,10 +55,10 @@ module Runner =
                 | _ -> true
             | ResolvedGroup(_, children) -> List.exists runsAnything children
 
-        let attempt (work: Async<unit>) =
+        let attempt (cancellation: CancellationToken) (work: Async<unit>) =
             task {
                 try
-                    do! Async.StartAsTask(work, cancellationToken = context.CancellationToken)
+                    do! Async.StartAsTask(work, cancellationToken = cancellation)
                     return None
                 with error ->
                     return Some error
@@ -69,10 +70,12 @@ module Runner =
                 | ResolvedLeaf(node, payload) ->
                     let leaf = { Node = node; Parent = parent; Payload = payload }
 
-                    match blocked, Map.tryFind node.Uid plan with
-                    | Some reason, _ -> do! report leaf (settled (skipped reason))
-                    | None, Some(TestPlan.Skip reason) -> do! report leaf (settled (skipped reason))
-                    | None, _ -> do! report leaf (execute leaf)
+                    // A leaf deactivated in source keeps its own reason, so a stray focus or
+                    // pending mark stays legible under a group whose setup failed.
+                    match Map.tryFind node.Uid plan, blocked with
+                    | Some(TestPlan.Skip reason), _ -> do! report leaf (settled (skipped reason))
+                    | _, Some reason -> do! report leaf (settled (skipped reason))
+                    | _, None -> do! report leaf (execute leaf)
                 | ResolvedGroup(node, children) ->
                     let descend blocking =
                         task {
@@ -86,14 +89,16 @@ module Runner =
                         // the reporter reads its node and parent.
                         let group = { Node = node; Parent = parent; Payload = async.Zero() }
 
-                        match! attempt (fixture.Setup()) with
+                        match! attempt context.CancellationToken (fixture.Setup()) with
                         | Some error ->
                             do! report group (settled (TestResult.create (outcomeOf error)))
                             do! descend (Some $"the setup of {node.Uid} failed")
                         | None ->
                             do! descend None
 
-                            match! attempt (fixture.Teardown()) with
+                            // Teardown runs outside the session's cancellation, so a cancelled
+                            // run still releases what setup acquired.
+                            match! attempt CancellationToken.None (fixture.Teardown()) with
                             | Some error -> do! report group (settled (TestResult.create (outcomeOf error)))
                             | None -> ()
                     | _ -> do! descend blocked

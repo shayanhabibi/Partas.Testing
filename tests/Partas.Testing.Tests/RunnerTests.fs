@@ -1,8 +1,8 @@
 module Partas.Testing.Tests.RunnerTests
 
-open Expecto
 open Microsoft.Testing.Platform.Extensions.Messages
 open Partas.Testing
+open Expecto
 open Partas.Testing.Tests.Fakes
 
 let private noop () = ()
