@@ -221,9 +221,9 @@ System.CommandLine dependency.
   the contract, but the writer that acts on it ships in the sibling `Microsoft.Testing.Extensions.TrxReport`
   package, which `Partas.TestingPlatform.Trx` references directly and registers through
   `AddTrxReportProvider()`. Reaching the builder to call that registration is an
-  `internal`-only seam (`FrameworkDefinition.BuilderExtensions`, construction gated by
-  `InternalsVisibleTo` grants to `Partas.TestingPlatform.Trx` and its own test project) rather
-  than a public CE operation — a public one would let any consumer register a deferred
+  `internal`-only seam (`FrameworkDefinition`'s representation, gated by an `InternalsVisibleTo`
+  grant to `Partas.TestingPlatform.Trx`) rather than a public CE operation — a public one would
+  let any consumer register a deferred
   `Func<IServiceProvider, _>` factory that runs inside a session and reaches `IMessageBus`, the
   same escalation the core's public surface otherwise closes off. `InternalsVisibleTo` without a
   matching strong name grants access by unsigned assembly name, which any assembly compiled with

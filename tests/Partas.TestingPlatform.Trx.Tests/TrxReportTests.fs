@@ -1,8 +1,8 @@
 module Partas.TestingPlatform.Trx.Tests.TrxReportTests
 
+open System
 open Expecto
 open Microsoft.Testing.Extensions.TrxReport.Abstractions
-open Microsoft.Testing.Platform.Builder
 open Microsoft.Testing.Platform.Extensions.Messages
 open Partas.TestingPlatform
 open Partas.TestingPlatform.Trx
@@ -73,62 +73,31 @@ let fullyQualifiedTypeNameTests =
         }
     ]
 
-[<Tests>]
-let builderExtensionTests =
-    testList "BuilderExtension (internal, exercised only from a granted assembly)" [
-        test "BuilderExtensions.set records the given actions" {
-            let extension = BuilderExtension.create (fun _ -> ())
-            let definition = FrameworkDefinition.empty<unit> |> BuilderExtensions.set [ extension ]
-
-            Expect.equal definition.BuilderExtensions.Length 1 "one action recorded"
-        }
-
-        test "BuilderExtensions.run invokes every declared action" {
-            let mutable calls = 0
-            let extension = BuilderExtension.create (fun _ -> calls <- calls + 1)
-
-            let definition =
-                FrameworkDefinition.empty<unit> |> BuilderExtensions.set [ extension; extension ]
-
-            definition |> BuilderExtensions.run Unchecked.defaultof<ITestApplicationBuilder>
-
-            Expect.equal calls 2 "both registered actions ran"
-        }
-
-        test "BuilderExtensions.run passes the given builder through to each action" {
-            let builder = Unchecked.defaultof<ITestApplicationBuilder>
-            let mutable seen = ValueNone
-            let extension = BuilderExtension.create (fun b -> seen <- ValueSome b)
-            let definition = FrameworkDefinition.empty<unit> |> BuilderExtensions.set [ extension ]
-
-            definition |> BuilderExtensions.run builder
-
-            match seen with
-            | ValueSome received -> Expect.isTrue (obj.ReferenceEquals(received, builder)) "same builder reference reaches the action"
-            | ValueNone -> failtest "the action never ran"
-        }
-    ]
+// BuilderExtension's case constructor and FrameworkDefinition's representation are internal to
+// Partas.TestingPlatform, granted only to Partas.TestingPlatform.Trx — not to this test
+// project (see AssemblyInfo.fs in both projects). The BuilderExtensions.set/.run mechanism
+// TrxReport.enable relies on is exercised end to end by endToEndTests below, through the real
+// production wiring, rather than unit-tested directly here.
 
 [<Tests>]
 let enableTests =
     testList "TrxReport.enable" [
         test "adds the TRX capability" {
             let definition = TrxReport.enable FrameworkDefinition.empty<unit>
-            Expect.equal definition.Capabilities.Length 1 "one capability added"
+            Expect.equal (definition |> FrameworkDefinition.capabilities).Length 1 "one capability added"
         }
 
         test "adds a builder extension" {
             let definition = TrxReport.enable FrameworkDefinition.empty<unit>
-            Expect.equal definition.BuilderExtensions.Length 1 "one builder extension added"
+            Expect.equal (definition |> FrameworkDefinition.builderExtensions).Length 1 "one builder extension added"
         }
 
         test "does not discard previously declared capabilities or builder extensions" {
             let definition =
-                { FrameworkDefinition.empty<unit> with
-                    Capabilities = [ TrxReport.capability ] }
+                testFramework<unit> { capabilities [ TrxReport.capability ] }
                 |> TrxReport.enable
 
-            Expect.equal definition.Capabilities.Length 2 "the prior capability is retained"
+            Expect.equal (definition |> FrameworkDefinition.capabilities).Length 2 "the prior capability is retained"
         }
     ]
 
@@ -141,60 +110,75 @@ let enableTests =
 /// does stop <c>--report-trx</c> from being a recognised option at all. Runs out-of-process,
 /// rather than calling <c>TestApplication.run</c> directly from inside this test, because that
 /// call builds and runs a second, nested MTP session inside the session already running these
-/// tests.
+/// tests. The sample is a <c>ProjectReference</c> of this test project (build-only, never
+/// opened), so its dll lands next to this project's own output at any configuration.
 /// </summary>
 [<Tests>]
 let endToEndTests =
     testList "TrxReport.enable, run through TestApplication.run (out of process)" [
-        testCase "registers AddTrxReportProvider, so --report-trx produces a report" (fun () ->
+        testCase "registers AddTrxReportProvider, so --report-trx produces a correct report" (fun () ->
             let resultsDirectory =
                 System.IO.Path.Combine(System.IO.Path.GetTempPath(), "trx-e2e-" + System.Guid.NewGuid().ToString("N"))
 
             System.IO.Directory.CreateDirectory resultsDirectory |> ignore
 
             try
-                let sampleDll =
-                    System.IO.Path.Combine(
-                        __SOURCE_DIRECTORY__,
-                        "..",
-                        "..",
-                        "samples",
-                        "Partas.TestingPlatform.Sample",
-                        "bin",
-                        "Debug",
-                        "net10.0",
-                        "Partas.TestingPlatform.Sample.dll"
-                    )
-                    |> System.IO.Path.GetFullPath
+                let sampleDll = System.IO.Path.Combine(AppContext.BaseDirectory, "Partas.TestingPlatform.Sample.dll")
 
                 Expect.isTrue
                     (System.IO.File.Exists sampleDll)
-                    $"the sample must be built first (looked at {sampleDll})"
+                    $"expected the sample's dll copied alongside this project's own output by its
+                      ProjectReference (looked at {sampleDll})"
 
-                let startInfo =
-                    System.Diagnostics.ProcessStartInfo(
-                        "dotnet",
-                        [ sampleDll
-                          "--report-trx"
-                          "--report-trx-filename"
-                          "e2e.trx"
-                          "--results-directory"
-                          resultsDirectory ]
-                        |> String.concat " "
-                    )
-
+                let startInfo = System.Diagnostics.ProcessStartInfo("dotnet")
+                startInfo.ArgumentList.Add sampleDll
+                startInfo.ArgumentList.Add "--report-trx"
+                startInfo.ArgumentList.Add "--report-trx-filename"
+                startInfo.ArgumentList.Add "e2e.trx"
+                startInfo.ArgumentList.Add "--results-directory"
+                startInfo.ArgumentList.Add resultsDirectory
                 startInfo.UseShellExecute <- false
+                startInfo.RedirectStandardOutput <- true
+                startInfo.RedirectStandardError <- true
 
                 use proc = System.Diagnostics.Process.Start startInfo
-                proc.WaitForExit 60_000 |> ignore
+                // Read concurrently with the process running: WaitForExit before draining a
+                // redirected stream can deadlock once its buffer fills.
+                let stdoutTask = proc.StandardOutput.ReadToEndAsync()
+                let stderrTask = proc.StandardError.ReadToEndAsync()
+                let exited = proc.WaitForExit 60_000
+                let diagnostics () = $"stdout:\n{stdoutTask.Result}\nstderr:\n{stderrTask.Result}"
+
+                Expect.isTrue exited $"the sample did not exit within 60s\n{diagnostics ()}"
+
+                // The sample declares one deliberately failing test (see Program.fs); MTP's
+                // documented exit code for a run that completed with a failure is 2.
+                Expect.equal proc.ExitCode 2 $"unexpected exit code\n{diagnostics ()}"
 
                 let trxPath = System.IO.Path.Combine(resultsDirectory, "e2e.trx")
 
                 Expect.isTrue
                     (System.IO.File.Exists trxPath)
-                    "AddTrxReportProvider ran and wrote a report; if the BuilderExtensions.run call
-                     site in TestApplication.run were deleted, --report-trx would go unrecognised
-                     and no file would appear here"
+                    $"AddTrxReportProvider ran and wrote a report; if the BuilderExtensions.run
+                      call site in TestApplication.run were deleted, --report-trx would go
+                      unrecognised and no file would appear here\n{diagnostics ()}"
+
+                let document = System.Xml.Linq.XDocument.Load trxPath
+                let ns = document.Root.Name.Namespace
+
+                let unitTests = document.Descendants(ns + "UnitTest") |> List.ofSeq
+
+                Expect.equal unitTests.Length 4 "the sample's four declared leaves are all reported"
+
+                let classNames =
+                    document.Descendants(ns + "TestMethod")
+                    |> Seq.map (fun testMethod -> testMethod.Attribute(System.Xml.Linq.XName.Get "className").Value)
+                    |> Set.ofSeq
+
+                Expect.equal
+                    classNames
+                    (set [ "parser/literals"; "parser" ])
+                    "leaves are grouped under their containing group's path, not left ungrouped or per-leaf"
             finally
                 System.IO.Directory.Delete(resultsDirectory, true))
     ]

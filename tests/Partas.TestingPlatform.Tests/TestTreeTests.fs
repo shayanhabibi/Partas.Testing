@@ -91,6 +91,21 @@ let tests =
             | Ok resolved -> resolvedLeavesOf resolved = leavesOf tree
             | Error _ -> true)
 
+        testProperty "unescape reverses resolve's escaping, name for name, at every nesting depth"
+        <| Prop.forAll
+            (Arb.fromGen (Gen.zip3 nameGen nameGen nameGen))
+            (fun (a, b, c) ->
+                let tree = Group(a, None, [], [ Group(b, None, [], [ leaf c ]) ])
+
+                match TestTree.resolve tree with
+                | Ok(ResolvedGroup(groupA, [ ResolvedGroup(groupB, [ ResolvedLeaf(leafNode, ()) ]) ])) ->
+                    let segment (uid: string) (parentUid: string) = uid.Substring(parentUid.Length + 1)
+
+                    TestTree.unescape (segment groupA.Uid "") = a
+                    && TestTree.unescape (segment groupB.Uid groupA.Uid) = b
+                    && TestTree.unescape (segment leafNode.Uid groupB.Uid) = c
+                | other -> failtestf "expected a nested group/group/leaf tree, got %A" other)
+
         testProperty "resolution fails only when a group holds duplicate sibling names"
         <| Prop.forAll arbTree (fun tree ->
             let rec hasDuplicateSiblings =

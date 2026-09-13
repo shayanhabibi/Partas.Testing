@@ -20,6 +20,10 @@
 
     <ItemGroup>
         <ProjectReference Include="../../src/Partas.TestingPlatform.Trx/Partas.TestingPlatform.Trx.fsproj"/>
+        <!-- Referenced (not opened) so the end-to-end test in TrxReportTests.fs can launch it
+             out-of-process: this expresses the build dependency and copies the sample's dll
+             next to this project's own output, at any configuration. -->
+        <ProjectReference Include="../../samples/Partas.TestingPlatform.Sample/Partas.TestingPlatform.Sample.fsproj"/>
     </ItemGroup>
 
 </Project>

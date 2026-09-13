@@ -2,15 +2,16 @@ module internal Partas.TestingPlatform.AssemblyInfo
 
 open System.Runtime.CompilerServices
 
-// BuilderExtension's case constructor is internal: it reaches a builder that can defer a
-// registered action's execution into the running session (see Framework.fs). Granted to the
-// shipped TRX companion and its own test project only — this binding's own unit tests
-// (Partas.TestingPlatform.Tests) get no grant, so this list stays as short as the set of
-// assemblies that legitimately need it. InternalsVisibleTo without a matching strong name is
-// a compile-time speed bump against accident, not a boundary against intent: any assembly
+// FrameworkDefinition's representation and BuilderExtension's case constructor are internal:
+// the latter reaches a builder that can defer a registered action's execution into the running
+// session (see Framework.fs). Granted to the shipped TRX companion only — neither this
+// binding's own unit tests (Partas.TestingPlatform.Tests) nor the TRX companion's own test
+// project need a grant from here directly; Partas.TestingPlatform.Trx.Tests reads and builds
+// FrameworkDefinition values through the public CE and the read accessors in the
+// FrameworkDefinition module instead. InternalsVisibleTo without a matching strong name is a
+// compile-time speed bump against accident, not a boundary against intent: any assembly
 // compiled with a matching AssemblyName can forge the grant. Strong-naming this assembly would
 // close that gap but changes the shipped package's identity for every consumer, so it is left
 // as the project owner's decision rather than applied here.
 [<assembly: InternalsVisibleTo("Partas.TestingPlatform.Trx")>]
-[<assembly: InternalsVisibleTo("Partas.TestingPlatform.Trx.Tests")>]
 do ()

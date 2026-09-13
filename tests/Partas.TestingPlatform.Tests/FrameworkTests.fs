@@ -34,7 +34,9 @@ type private StubCapability() =
 let tests =
     testList "FrameworkDefinition.commandLineOptions" [
         test "an empty definition carries no command line providers" {
-            Expect.isEmpty FrameworkDefinition.empty<int>.CommandLineOptionsProviders "no providers by default"
+            Expect.isEmpty
+                (FrameworkDefinition.empty<int> |> FrameworkDefinition.commandLineOptionsProviders)
+                "no providers by default"
         }
 
         test "the CE operation records the given providers" {
@@ -46,10 +48,12 @@ let tests =
                     commandLineOptions [ factory ]
                 }
 
-            Expect.equal definition.CommandLineOptionsProviders.Length 1 "one provider recorded"
+            let providers = definition |> FrameworkDefinition.commandLineOptionsProviders
+
+            Expect.equal providers.Length 1 "one provider recorded"
 
             Expect.isTrue
-                (obj.ReferenceEquals(definition.CommandLineOptionsProviders.[0], factory))
+                (obj.ReferenceEquals(providers.[0], factory))
                 "same factory retained"
         }
     ]
@@ -58,7 +62,7 @@ let tests =
 let capabilitiesTests =
     testList "FrameworkDefinition.capabilities" [
         test "an empty definition carries no extra capabilities" {
-            Expect.isEmpty FrameworkDefinition.empty<int>.Capabilities "no capabilities by default"
+            Expect.isEmpty (FrameworkDefinition.empty<int> |> FrameworkDefinition.capabilities) "no capabilities by default"
         }
 
         test "the CE operation records the given capability factories" {
@@ -70,10 +74,12 @@ let capabilitiesTests =
                     capabilities [ factory ]
                 }
 
-            Expect.equal definition.Capabilities.Length 1 "one factory recorded"
+            let capabilities = definition |> FrameworkDefinition.capabilities
+
+            Expect.equal capabilities.Length 1 "one factory recorded"
 
             Expect.isTrue
-                (obj.ReferenceEquals(definition.Capabilities.[0], factory))
+                (obj.ReferenceEquals(capabilities.[0], factory))
                 "same factory retained"
         }
 
@@ -81,9 +87,11 @@ let capabilitiesTests =
             let stub = StubCapability()
 
             let definition =
-                { FrameworkDefinition.empty<int> with
-                    Banner = Some "hi"
-                    Capabilities = [ fun () -> stub :> ITestFrameworkCapability ] }
+                testFramework<int> {
+                    uid "x"
+                    banner "hi"
+                    capabilities [ fun () -> stub :> ITestFrameworkCapability ]
+                }
 
             let capabilities = (FrameworkCapabilities definition :> ITestFrameworkCapabilities).Capabilities
 
@@ -96,8 +104,10 @@ let capabilitiesTests =
             let stub = StubCapability()
 
             let definition =
-                { FrameworkDefinition.empty<int> with
-                    Capabilities = [ fun () -> stub :> ITestFrameworkCapability ] }
+                testFramework<int> {
+                    uid "x"
+                    capabilities [ fun () -> stub :> ITestFrameworkCapability ]
+                }
 
             let capabilities = (FrameworkCapabilities definition :> ITestFrameworkCapabilities).Capabilities
 
@@ -112,7 +122,12 @@ let capabilitiesTests =
                 invocations <- invocations + 1
                 StubCapability() :> ITestFrameworkCapability
 
-            let definition = { FrameworkDefinition.empty<int> with Capabilities = [ factory ] }
+            let definition =
+                testFramework<int> {
+                    uid "x"
+                    capabilities [ factory ]
+                }
+
             let capabilities = FrameworkCapabilities definition :> ITestFrameworkCapabilities
 
             capabilities.Capabilities |> ignore
@@ -126,7 +141,9 @@ let capabilitiesTests =
 let builderExtensionsTests =
     testList "FrameworkDefinition.BuilderExtensions" [
         test "an empty definition carries no builder extensions" {
-            Expect.isEmpty FrameworkDefinition.empty<int>.BuilderExtensions "no builder extensions by default"
+            Expect.isEmpty
+                (FrameworkDefinition.empty<int> |> FrameworkDefinition.builderExtensions)
+                "no builder extensions by default"
         }
     ]
 // The internal BuilderExtensions.set/.run mechanism is exercised from

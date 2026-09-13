@@ -36,12 +36,7 @@ type RunContext<'T> =
 /// <c>IServiceProvider</c> and <c>IMessageBus</c> from there. Construction is limited to the
 /// assemblies this binding names in <c>InternalsVisibleTo</c> — an unsigned request, raising
 /// the bar against an accidental caller rather than closing the door on a deliberate one; an
-/// assembly compiled with a matching name gets the same access. The containing
-/// <c>FrameworkDefinition.BuilderExtensions</c> field stays a plain public list: a caller
-/// outside the grant can still replace it wholesale (e.g. with the empty list, silently
-/// disabling every extension) or copy one definition's list onto another, but cannot construct
-/// a new instance of this type to inject — the values it can move around are limited to ones a
-/// granted assembly already produced.
+/// assembly compiled with a matching name gets the same access.
 /// </summary>
 type BuilderExtension = internal BuilderExtension of (ITestApplicationBuilder -> unit)
 
@@ -49,26 +44,33 @@ module internal BuilderExtension =
     let create (action: ITestApplicationBuilder -> unit) = BuilderExtension action
     let invoke (builder: ITestApplicationBuilder) (BuilderExtension action) = action builder
 
+/// <summary>
+/// A test framework's declared identity, tree, execution, and extension points. The
+/// representation is internal: a caller outside the assemblies this binding grants
+/// <c>InternalsVisibleTo</c> builds and reads one exclusively through <c>testFramework</c>,
+/// <c>TestApplication.run</c>, and the read accessors in the <c>FrameworkDefinition</c> module.
+/// </summary>
 type FrameworkDefinition<'T> =
-    { Uid: string
-      Version: string
-      DisplayName: string
-      Description: string
-      Banner: string option
-      BuildTree: unit -> TestTree<'T>
-      RunTests: RunContext<'T> -> Task
-      /// <summary>
-      /// Factories for MTP command-line option providers, declared to the platform alongside
-      /// the framework so custom options survive MTP's unrecognised-option rejection.
-      /// </summary>
-      CommandLineOptionsProviders: (unit -> ICommandLineOptionsProvider) list
-      /// <summary>
-      /// Factories for capabilities registered alongside the banner capability, letting a
-      /// companion package (e.g. TRX reporting) contribute one without core binding taking
-      /// its dependency.
-      /// </summary>
-      Capabilities: (unit -> ITestFrameworkCapability) list
-      BuilderExtensions: BuilderExtension list }
+    internal
+        { Uid: string
+          Version: string
+          DisplayName: string
+          Description: string
+          Banner: string option
+          BuildTree: unit -> TestTree<'T>
+          RunTests: RunContext<'T> -> Task
+          /// <summary>
+          /// Factories for MTP command-line option providers, declared to the platform alongside
+          /// the framework so custom options survive MTP's unrecognised-option rejection.
+          /// </summary>
+          CommandLineOptionsProviders: (unit -> ICommandLineOptionsProvider) list
+          /// <summary>
+          /// Factories for capabilities registered alongside the banner capability, letting a
+          /// companion package (e.g. TRX reporting) contribute one without core binding taking
+          /// its dependency.
+          /// </summary>
+          Capabilities: (unit -> ITestFrameworkCapability) list
+          BuilderExtensions: BuilderExtension list }
 
 type private BannerCapability(message: string) =
     interface IBannerMessageOwnerCapability with
@@ -164,6 +166,16 @@ module FrameworkDefinition =
           CommandLineOptionsProviders = []
           Capabilities = []
           BuilderExtensions = [] }
+
+    /// <summary>The command-line option provider factories declared on this definition.</summary>
+    let commandLineOptionsProviders (definition: FrameworkDefinition<'T>) =
+        definition.CommandLineOptionsProviders
+
+    /// <summary>The capability factories declared on this definition.</summary>
+    let capabilities (definition: FrameworkDefinition<'T>) = definition.Capabilities
+
+    /// <summary>The builder extensions declared on this definition.</summary>
+    let builderExtensions (definition: FrameworkDefinition<'T>) = definition.BuilderExtensions
 
 type TestFrameworkBuilder<'T>() =
     member _.Yield(_: unit) = FrameworkDefinition.empty<'T>
