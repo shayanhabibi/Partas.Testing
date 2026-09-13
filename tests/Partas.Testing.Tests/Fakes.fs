@@ -54,7 +54,8 @@ let runSuiteUpdatesUnder (cancellation: CancellationToken) filterApplied tree =
           Leaves = Execution.leaves resolved
           Reporter = Reporter(bus, StubProducer(), SessionUid "session")
           CancellationToken = cancellation
-          FilterApplied = filterApplied }
+          FilterApplied = filterApplied
+          Services = null }
 
     (Runner.run context).GetAwaiter().GetResult()
 

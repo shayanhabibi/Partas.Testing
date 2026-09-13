@@ -10,6 +10,7 @@ open System.Threading.Tasks
 open Microsoft.Testing.Platform.Builder
 open Microsoft.Testing.Platform.Capabilities.TestFramework
 open Microsoft.Testing.Platform.Extensions
+open Microsoft.Testing.Platform.Extensions.CommandLine
 open Microsoft.Testing.Platform.Extensions.Messages
 open Microsoft.Testing.Platform.Extensions.TestFramework
 open Microsoft.Testing.Platform.Helpers
@@ -22,7 +23,12 @@ type RunContext<'T> =
       Reporter: Reporter
       CancellationToken: CancellationToken
       /// <summary>Whether the platform narrowed this run, rather than asking for everything.</summary>
-      FilterApplied: bool }
+      FilterApplied: bool
+      /// <summary>
+      /// MTP's service provider, e.g. for <c>ServiceProviderExtensions.GetCommandLineOptions()</c>
+      /// to read the arguments a declared option received.
+      /// </summary>
+      Services: IServiceProvider }
 
 type FrameworkDefinition<'T> =
     { Uid: string
@@ -31,7 +37,12 @@ type FrameworkDefinition<'T> =
       Description: string
       Banner: string option
       BuildTree: unit -> TestTree<'T>
-      RunTests: RunContext<'T> -> Task }
+      RunTests: RunContext<'T> -> Task
+      /// <summary>
+      /// Factories for MTP command-line option providers, declared to the platform alongside
+      /// the framework so custom options survive MTP's unrecognised-option rejection.
+      /// </summary>
+      CommandLineOptionsProviders: (unit -> ICommandLineOptionsProvider) list }
 
 type private BannerCapability(message: string) =
     interface IBannerMessageOwnerCapability with
@@ -47,6 +58,10 @@ type FrameworkCapabilities<'T>(definition: FrameworkDefinition<'T>) =
 
 type Framework<'T>(definition: FrameworkDefinition<'T>) =
     let mutable resolved = Error "The test session has not been created."
+    let mutable services: IServiceProvider = null
+
+    /// <summary>Records the service provider MTP hands the framework at registration time.</summary>
+    member _.SetServices(serviceProvider: IServiceProvider) = services <- serviceProvider
 
     interface IExtension with
         member _.Uid = definition.Uid
@@ -94,7 +109,8 @@ type Framework<'T>(definition: FrameworkDefinition<'T>) =
                                       Leaves = Execution.leaves surviving
                                       Reporter = Reporter(context.MessageBus, producer, session)
                                       CancellationToken = context.CancellationToken
-                                      FilterApplied = not (request.Filter :? NopFilter) }
+                                      FilterApplied = not (request.Filter :? NopFilter)
+                                      Services = services }
 
                                 do! definition.RunTests runContext
                     | _ -> ()
@@ -112,7 +128,8 @@ module FrameworkDefinition =
           Description = ""
           Banner = None
           BuildTree = fun () -> Group("", None, [], [])
-          RunTests = fun _ -> Task.CompletedTask }
+          RunTests = fun _ -> Task.CompletedTask
+          CommandLineOptionsProviders = [] }
 
 type TestFrameworkBuilder<'T>() =
     member _.Yield(_: unit) = FrameworkDefinition.empty<'T>
@@ -138,6 +155,11 @@ type TestFrameworkBuilder<'T>() =
     [<CustomOperation "onRun">]
     member _.OnRun(definition: FrameworkDefinition<'T>, run) = { definition with RunTests = run }
 
+    /// <summary>Declares command-line option providers, replacing any previously declared.</summary>
+    [<CustomOperation "commandLineOptions">]
+    member _.CommandLineOptions(definition: FrameworkDefinition<'T>, providers) =
+        { definition with CommandLineOptionsProviders = providers }
+
 [<AutoOpen>]
 module Builders =
     let testFramework<'T> = TestFrameworkBuilder<'T>()
@@ -162,11 +184,16 @@ module TestApplication =
 
             builder.RegisterTestFramework(
                 (fun _ -> FrameworkCapabilities definition :> ITestFrameworkCapabilities),
-                (fun _ _ -> framework :> ITestFramework)
+                (fun _ serviceProvider ->
+                    framework.SetServices serviceProvider
+                    framework :> ITestFramework)
             )
             |> ignore
 
             builder.AddTreeNodeFilterService framework
+
+            for factory in definition.CommandLineOptionsProviders do
+                builder.CommandLine.AddProvider(fun () -> factory ())
 
             use! app = builder.BuildAsync()
             return! app.RunAsync()

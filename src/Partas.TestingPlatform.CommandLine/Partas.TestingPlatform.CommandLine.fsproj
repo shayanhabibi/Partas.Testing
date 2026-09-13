@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>$(PartasTargetFrameworks)</TargetFrameworks>
+        <LangVersion>latest</LangVersion>
+        <PackageId>Partas.TestingPlatform.CommandLine</PackageId>
+        <Title>Partas.TestingPlatform.CommandLine</Title>
+        <Description>Adapts FSharp.SystemCommandLine option declarations onto Microsoft.Testing.Platform's command-line surface.</Description>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="CommandLineOptions.fs"/>
+        <None Include="../../README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="FSharp.SystemCommandLine" Version="2.2.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../Partas.TestingPlatform/Partas.TestingPlatform.fsproj"/>
+    </ItemGroup>
+
+</Project>

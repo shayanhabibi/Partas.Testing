@@ -17,6 +17,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Partas.TestingPlatform/Partas.TestingPlatform.fsproj" />
+    <Project Path="src/Partas.TestingPlatform.CommandLine/Partas.TestingPlatform.CommandLine.fsproj" />
     <Project Path="src/Partas.Testing/Partas.Testing.fsproj" />
   </Folder>
   <Folder Name="/samples/">
@@ -25,6 +26,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Partas.TestingPlatform.Tests/Partas.TestingPlatform.Tests.fsproj" />
+    <Project Path="tests/Partas.TestingPlatform.CommandLine.Tests/Partas.TestingPlatform.CommandLine.Tests.fsproj" />
     <Project Path="tests/Partas.Testing.Tests/Partas.Testing.Tests.fsproj" />
   </Folder>
   <!--#if (!Docs_none) -->

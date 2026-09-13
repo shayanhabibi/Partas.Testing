@@ -19,6 +19,7 @@
         <Compile Include="ExecutionTests.fs"/>
         <Compile Include="ReporterTests.fs"/>
         <Compile Include="SessionTests.fs"/>
+        <Compile Include="FrameworkTests.fs"/>
         <Compile Include="Main.fs"/>
     </ItemGroup>
 
