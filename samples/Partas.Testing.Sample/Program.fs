@@ -16,6 +16,20 @@ let suite =
         Test.caseAsync ("reads a file", async { return () })
 
         Test.case ("reports the source span", fun () -> ())
+
+        Test.listWith (
+            "a session",
+            (fun () -> async { return "1 2 3" }),
+            (fun _ -> async { return () }),
+            fun source -> [
+                Test.case ("reads its source", fun () -> Expect.equal source.Value "1 2 3" "the source")
+            ])
+
+        Test.listWith (
+            "a broken session",
+            (fun () -> async { return failwith "the connection refused": string }),
+            (fun _ -> async { return () }),
+            fun _ -> [ Test.case ("never runs", fun () -> ()) ])
     ])
 
 [<EntryPoint>]

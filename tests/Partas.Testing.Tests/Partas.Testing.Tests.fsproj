@@ -15,6 +15,7 @@
         <Compile Include="FocusTests.fs"/>
         <Compile Include="RunnerTests.fs"/>
         <Compile Include="ExpectTests.fs"/>
+        <Compile Include="FixtureTests.fs"/>
         <Compile Include="Main.fs"/>
     </ItemGroup>
 
