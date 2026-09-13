@@ -35,7 +35,9 @@ module Runner =
     /// the plan excludes as skipped. A platform filter overrides a source marking of focus. A
     /// group owning a fixture brackets the leaves it runs with setup and teardown, and reports an
     /// outcome of its own when either raises. The root runs its children concurrently, and every
-    /// group runs its own children under the mode <c>modeOf</c> gives it.
+    /// group runs its own children under the mode <c>modeOf</c> gives it. Once the platform
+    /// requests a graceful stop, every remaining leaf reports skipped and a fixture group not yet
+    /// entered stays unused, while a group already bracketing its leaves still tears down.
     /// </summary>
     let run (context: RunContext<TestBody>) : Task =
         let plan = Focus.plan (not context.FilterApplied) context.Tree
@@ -46,6 +48,8 @@ module Runner =
             | _ -> Failed(Some error, None)
 
         let cancelled = "the session was cancelled"
+
+        let stopped = "the platform stopped the run early"
 
         let skipped reason =
             { TestResult.create Skipped with Explanation = Some reason }
@@ -115,6 +119,7 @@ module Runner =
                     | _, Some reason -> do! report leaf (settled (skipped reason))
                     | _, None when context.CancellationToken.IsCancellationRequested ->
                         do! report leaf (settled (skipped cancelled))
+                    | _, None when context.GracefulStop.IsRequested -> do! report leaf (settled (skipped stopped))
                     | _, None -> do! report leaf (execute leaf)
                 | ResolvedGroup(node, children) ->
                     let mode = modeOf node inherited
@@ -138,7 +143,9 @@ module Runner =
                             }
 
                     match fixtureOf node, blocked with
-                    | Some fixture, None when List.exists runsAnything children ->
+                    | Some fixture, None when
+                        List.exists runsAnything children && not context.GracefulStop.IsRequested
+                        ->
                         // A group's own outcome travels through the leaf-shaped reporter record;
                         // the reporter reads its node and parent.
                         let group = { Node = node; Parent = parent; Payload = async.Zero() }

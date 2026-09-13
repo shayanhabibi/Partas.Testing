@@ -334,6 +334,32 @@ let tests =
                 "the order of the run"
         }
 
+        test "an inner fixture group under a failed outer setup leaves its own bracket unrun" {
+            let log = ResizeArray<string>()
+
+            let tree =
+                Test.listWith (
+                    "outer",
+                    (fun () -> async { raise (exn "the outer setup raised") }),
+                    (fun _ -> async { log.Add "outer teardown" })
+                )
+                    (fun _ ->
+                        [ Test.listWith (
+                              "inner",
+                              (fun () -> async { log.Add "inner setup" }),
+                              (fun _ -> async { log.Add "inner teardown" })
+                          )
+                              (fun _ -> [ Test.case "a" (fun () -> log.Add "a") ]) ])
+
+            let states = runSuite false tree
+
+            Expect.isEmpty (List.ofSeq log) "neither the inner bracket nor the leaf under it ran"
+            Expect.isTrue (states.["/outer"] :? FailedTestNodeStateProperty) "the outer group failed"
+            Expect.isFalse (states.ContainsKey "/outer/inner") "the inner group carries no outcome of its own"
+            Expect.isTrue (states.["/outer/inner/a"] :? SkippedTestNodeStateProperty) "the nested leaf is skipped"
+            Expect.stringContains (states.["/outer/inner/a"]).Explanation "/outer" "the explanation names the outer group"
+        }
+
         test "an inner setup that raises still tears the outer fixture down" {
             let log = ResizeArray<string>()
 

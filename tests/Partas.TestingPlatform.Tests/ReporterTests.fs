@@ -92,3 +92,50 @@ let tests =
             Expect.isTrue (stateOf updates.[1] :? ErrorTestNodeStateProperty) "errored"
         }
     ]
+
+type private Marker(uid: string) =
+    member _.Uid = uid
+    interface IProperty
+
+[<Tests>]
+let contributedPropertyTests =
+    let runContributing contribute =
+        let bus = RecordingMessageBus()
+        let reporter = Reporter(bus, StubProducer(), session, contribute)
+
+        reporter
+            .Run(leaf, (fun _ -> Task.FromResult(TestResult.create Passed)), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult()
+        |> ignore
+
+        bus.Updates
+
+    let markersOf (update: TestNodeUpdateMessage) =
+        update.TestNode.Properties.OfType<Marker>() |> Array.map _.Uid |> List.ofArray
+
+    testList "Reporter.Run, contributing properties" [
+        test "a contributed property reaches the outcome" {
+            let updates = runContributing (fun leaf -> [ Marker leaf.Node.Uid ])
+
+            Expect.sequenceEqual (markersOf updates.[1]) [ "/parser/a" ] "the leaf the contribution saw"
+        }
+
+        test "the contribution reads the leaf's parent" {
+            let updates = runContributing (fun leaf -> [ Marker(Option.defaultValue "" leaf.Parent) ])
+
+            Expect.sequenceEqual (markersOf updates.[1]) [ "/parser" ] "the parent uid"
+        }
+
+        test "progress carries no contributed property" {
+            let updates = runContributing (fun _ -> [ Marker "m" ])
+
+            Expect.isEmpty (markersOf updates.[0]) "the in-progress update stays as published"
+        }
+
+        test "a reporter built without a contribution publishes the result's own properties only" {
+            let updates, _ = run (returning (TestResult.create Passed))
+
+            Expect.isEmpty (markersOf updates.[1]) "no contribution"
+        }
+    ]

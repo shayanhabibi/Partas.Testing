@@ -28,8 +28,11 @@ module TrxReport =
         TrxFullyQualifiedTypeNameProperty(group.TrimStart TestTree.Separator |> TestTree.unescape) :> IProperty
 
     /// <summary>
-    /// Adds the TRX capability and registers <c>Microsoft.Testing.Extensions.TrxReport</c>'s
-    /// writer with the builder, so <c>--report-trx</c> both parses and produces a report.
+    /// Adds the TRX capability, puts <c>fullyQualifiedTypeName</c> on every reported outcome, and
+    /// registers <c>Microsoft.Testing.Extensions.TrxReport</c>'s writer with the builder, so
+    /// <c>--report-trx</c> parses, and produces a report, for any framework built on the binding.
+    /// The writer raises on a result carrying no grouping name, so <c>enable</c> supplies one for
+    /// every framework rather than leaving it to each execution walk.
     /// </summary>
     let enable (definition: FrameworkDefinition<'T>) : FrameworkDefinition<'T> =
         { definition with
@@ -37,3 +40,4 @@ module TrxReport =
             BuilderExtensions =
                 definition.BuilderExtensions
                 @ [ BuilderExtension.create (fun builder -> builder.AddTrxReportProvider() |> ignore) ] }
+        |> FrameworkDefinition.addLeafProperties (fun leaf -> [ fullyQualifiedTypeName leaf ])

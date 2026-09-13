@@ -14,6 +14,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Partas.Testing\Partas.Testing.fsproj"/>
+        <ProjectReference Include="..\..\src\Partas.TestingPlatform.Trx\Partas.TestingPlatform.Trx.fsproj"/>
     </ItemGroup>
 
 </Project>

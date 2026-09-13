@@ -1,6 +1,8 @@
 module Partas.Testing.Sample.Program
 
 open Partas.Testing
+open Partas.TestingPlatform
+open Partas.TestingPlatform.Trx
 
 let suite =
     Test.list "parser" [
@@ -42,5 +44,11 @@ let suite =
         ) (fun _ -> [ Test.case "never runs" (fun () -> ()) ])
     ]
 
+// TRX reporting arrives as a definition-to-definition function from the companion package, so
+// --report-trx writes a report of this same run. runTestsWithArgs argv (fun () -> suite) is the
+// one-line form for a suite declaring no companion of its own.
 [<EntryPoint>]
-let main argv = runTestsWithArgs argv (fun () -> suite)
+let main argv =
+    testSuite (fun () -> suite)
+    |> TrxReport.enable
+    |> TestApplication.run argv

@@ -9,13 +9,25 @@ open Microsoft.Testing.Platform.TestHost
 
 /// <summary>
 /// Publishes the progress and the outcome of individual leaves. Ordering and concurrency belong
-/// to the caller; a reporter brackets one leaf it is handed.
+/// to the caller; a reporter brackets one leaf it is handed. <c>contribute</c> supplies the
+/// properties a companion package requires on every outcome — <c>Partas.TestingPlatform.Trx</c>'s
+/// grouping name, for one — keeping them out of a framework's own execution walk.
 /// </summary>
-type Reporter(bus: IMessageBus, producer: IDataProducer, session: SessionUid) =
+type Reporter
+    (
+        bus: IMessageBus,
+        producer: IDataProducer,
+        session: SessionUid,
+        contribute: ExecutableLeaf<unit> -> IProperty list
+    ) =
+
+    new(bus: IMessageBus, producer: IDataProducer, session: SessionUid) =
+        Reporter(bus, producer, session, fun _ -> [])
 
     /// <summary>
     /// Publishes the leaf as in progress, runs the body, then publishes its result with the
-    /// elapsed timing. A body that raises is published as errored and returned as such.
+    /// elapsed timing and the contributed properties. A body that raises is published as errored
+    /// and returned as such.
     /// </summary>
     member _.Run(leaf: ExecutableLeaf<'T>, body: CancellationToken -> Task<TestResult>, cancellation: CancellationToken) : Task<TestResult> =
         let parent = leaf.Parent |> Option.map TestNodeUid |> Option.toObj
@@ -42,6 +54,9 @@ type Reporter(bus: IMessageBus, producer: IDataProducer, session: SessionUid) =
             clock.Stop()
             let timing = TimingInfo(start, start + clock.Elapsed, clock.Elapsed)
 
-            do! send (TestResult.properties result @ [ TimingProperty timing ])
+            let contributed =
+                contribute { Node = leaf.Node; Parent = leaf.Parent; Payload = () }
+
+            do! send (TestResult.properties result @ [ TimingProperty timing ] @ contributed)
             return result
         }

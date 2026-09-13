@@ -18,6 +18,18 @@ open Microsoft.Testing.Platform.Helpers
 open Microsoft.Testing.Platform.Requests
 open Microsoft.Testing.Platform.Services
 
+/// <summary>
+/// A latch the platform sets to ask a run to stop early; <c>--maximum-failed-tests</c> sets it
+/// once the failure count reaches its argument. A framework reads it between tests, so a test
+/// already running continues to its own end. Setting it twice leaves it set.
+/// </summary>
+type GracefulStop() =
+    let mutable requested = 0
+
+    member _.IsRequested = Interlocked.CompareExchange(&requested, 0, 0) = 1
+
+    member _.Request() = Interlocked.Exchange(&requested, 1) |> ignore
+
 /// <summary>The surviving tree, a reporter for its leaves, and the session's cancellation.</summary>
 type RunContext<'T> =
     { Tree: ResolvedTestTree<'T>
@@ -27,7 +39,8 @@ type RunContext<'T> =
       /// <summary>Whether the platform narrowed this run, rather than asking for everything.</summary>
       FilterApplied: bool
       /// <summary>MTP's parsed command-line options, for reading a declared option's value.</summary>
-      CommandLineOptions: ICommandLineOptions }
+      CommandLineOptions: ICommandLineOptions
+      GracefulStop: GracefulStop }
 
 /// <summary>
 /// An action run on the builder before it builds, for a companion package to register onto
@@ -70,22 +83,52 @@ type FrameworkDefinition<'T> =
           /// its dependency.
           /// </summary>
           Capabilities: (unit -> ITestFrameworkCapability) list
+          /// <summary>
+          /// Properties published with every outcome the binding reports, letting a companion
+          /// package (e.g. TRX reporting) put what its writer requires on every result,
+          /// independent of the framework's execution walk.
+          /// </summary>
+          LeafProperties: ExecutableLeaf<unit> -> IProperty list
           BuilderExtensions: BuilderExtension list }
 
 type private BannerCapability(message: string) =
     interface IBannerMessageOwnerCapability with
         member _.GetBannerMessageAsync() = Task.FromResult message
 
-type FrameworkCapabilities<'T>(definition: FrameworkDefinition<'T>) =
+/// <summary>
+/// Sets the given latch when the platform asks a run to stop, and reports the request honoured.
+/// Reporting <c>true</c> holds the platform to its graceful path, so tests already running reach
+/// their own end and publish their own results.
+/// </summary>
+type private GracefulStopCapability(stop: GracefulStop) =
+    interface IGracefulStopTestExecutionCapability with
+        member _.StopTestExecutionAsync(_) =
+            stop.Request()
+            Task.CompletedTask
+
+    interface IGracefulStopTestExecutionResultCapability with
+        member _.TryStopTestExecutionAsync(_) =
+            stop.Request()
+            Task.FromResult true
+
+/// <summary>
+/// The capabilities a definition declares to the platform: the graceful stop paired with the
+/// <c>--maximum-failed-tests</c> registration, the banner when the definition declares one, and
+/// every capability factory the definition carries.
+/// </summary>
+type FrameworkCapabilities<'T>(definition: FrameworkDefinition<'T>, stop: GracefulStop) =
     let capabilities =
         let banner =
             definition.Banner
             |> Option.map (fun message -> BannerCapability message :> ITestFrameworkCapability)
             |> Option.toList
 
-        (banner @ List.map (fun factory -> factory ()) definition.Capabilities)
+        (GracefulStopCapability stop :> ITestFrameworkCapability)
+        :: (banner @ List.map (fun factory -> factory ()) definition.Capabilities)
         |> Array.ofList
         :> IReadOnlyCollection<_>
+
+    new(definition: FrameworkDefinition<'T>) = FrameworkCapabilities<'T>(definition, GracefulStop())
 
     interface ITestFrameworkCapabilities with
         member _.Capabilities = capabilities
@@ -93,6 +136,10 @@ type FrameworkCapabilities<'T>(definition: FrameworkDefinition<'T>) =
 type Framework<'T>(definition: FrameworkDefinition<'T>) =
     let mutable resolved = Error "The test session has not been created."
     let mutable services: IServiceProvider = null
+    let stop = GracefulStop()
+
+    /// <summary>The latch the framework's graceful stop capability sets.</summary>
+    member internal _.GracefulStop = stop
 
     /// <summary>Records the service provider MTP hands the framework at registration time.</summary>
     member internal _.SetServices(serviceProvider: IServiceProvider) = services <- serviceProvider
@@ -141,10 +188,17 @@ type Framework<'T>(definition: FrameworkDefinition<'T>) =
                                 let runContext: RunContext<'T> =
                                     { Tree = surviving
                                       Leaves = Execution.leaves surviving
-                                      Reporter = Reporter(context.MessageBus, producer, session)
+                                      Reporter =
+                                        Reporter(
+                                            context.MessageBus,
+                                            producer,
+                                            session,
+                                            definition.LeafProperties
+                                        )
                                       CancellationToken = context.CancellationToken
                                       FilterApplied = not (request.Filter :? NopFilter)
-                                      CommandLineOptions = services.GetCommandLineOptions() }
+                                      CommandLineOptions = services.GetCommandLineOptions()
+                                      GracefulStop = stop }
 
                                 do! definition.RunTests runContext
                     | _ -> ()
@@ -165,6 +219,7 @@ module FrameworkDefinition =
           RunTests = fun _ -> Task.CompletedTask
           CommandLineOptionsProviders = []
           Capabilities = []
+          LeafProperties = fun _ -> []
           BuilderExtensions = [] }
 
     /// <summary>The command-line option provider factories declared on this definition.</summary>
@@ -174,8 +229,42 @@ module FrameworkDefinition =
     /// <summary>The capability factories declared on this definition.</summary>
     let capabilities (definition: FrameworkDefinition<'T>) = definition.Capabilities
 
+    /// <summary>
+    /// The definition with the given capability factory declared after the ones already on it.
+    /// The composable counterpart of the <c>capabilities</c> CE operation, for a definition a
+    /// caller received already built.
+    /// </summary>
+    let addCapability (factory: unit -> ITestFrameworkCapability) (definition: FrameworkDefinition<'T>) =
+        { definition with Capabilities = definition.Capabilities @ [ factory ] }
+
+    /// <summary>
+    /// The definition with the given command-line option provider factory declared after the ones
+    /// already on it. The composable counterpart of the <c>commandLineOptions</c> CE operation,
+    /// for a definition a caller received already built.
+    /// </summary>
+    let addCommandLineOptionsProvider
+        (factory: unit -> ICommandLineOptionsProvider)
+        (definition: FrameworkDefinition<'T>)
+        =
+        { definition with CommandLineOptionsProviders = definition.CommandLineOptionsProviders @ [ factory ] }
+
     /// <summary>The builder extensions declared on this definition.</summary>
     let builderExtensions (definition: FrameworkDefinition<'T>) = definition.BuilderExtensions
+
+    /// <summary>The properties this definition publishes with every reported outcome.</summary>
+    let leafProperties (definition: FrameworkDefinition<'T>) = definition.LeafProperties
+
+    /// <summary>
+    /// The definition publishing the given properties with every reported outcome, after any it
+    /// already contributes.
+    /// </summary>
+    let addLeafProperties
+        (contribute: ExecutableLeaf<unit> -> IProperty list)
+        (definition: FrameworkDefinition<'T>)
+        =
+        let declared = definition.LeafProperties
+
+        { definition with LeafProperties = fun leaf -> declared leaf @ contribute leaf }
 
 type TestFrameworkBuilder<'T>() =
     member _.Yield(_: unit) = FrameworkDefinition.empty<'T>
@@ -248,7 +337,7 @@ module TestApplication =
             let framework = Framework definition
 
             builder.RegisterTestFramework(
-                (fun _ -> FrameworkCapabilities definition :> ITestFrameworkCapabilities),
+                (fun _ -> FrameworkCapabilities(definition, framework.GracefulStop) :> ITestFrameworkCapabilities),
                 (fun _ serviceProvider ->
                     framework.SetServices serviceProvider
                     framework :> ITestFramework)
@@ -256,6 +345,7 @@ module TestApplication =
             |> ignore
 
             builder.AddTreeNodeFilterService framework
+            builder.AddMaximumFailedTestsService framework
 
             for factory in definition.CommandLineOptionsProviders do
                 builder.CommandLine.AddProvider(fun () -> factory ())

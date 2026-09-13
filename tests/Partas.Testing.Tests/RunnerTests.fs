@@ -4,6 +4,7 @@ open System
 open System.Threading
 open Microsoft.Testing.Platform.Extensions.Messages
 open Partas.Testing
+open Partas.TestingPlatform
 open Expecto
 open Partas.Testing.Tests.Fakes
 
@@ -180,5 +181,75 @@ let tests =
             let states = runSuite false tree
 
             Expect.equal (Map.count states) 3 "one terminal state per leaf"
+        }
+    ]
+
+[<Tests>]
+let gracefulStopTests =
+    testList "Runner.run under a graceful stop" [
+        test "a leaf reached after the stop reports skipped without running its body" {
+            let stop = GracefulStop()
+            let log = ResizeArray<string>()
+
+            let tree =
+                Test.sequentialList "s" [
+                    Test.case "a" (fun () ->
+                        log.Add "a"
+                        stop.Request())
+                    Test.case "b" (fun () -> log.Add "b")
+                ]
+
+            let states = runSuiteStopping stop false tree
+
+            Expect.sequenceEqual (List.ofSeq log) [ "a" ] "b's body never ran"
+            Expect.isTrue (stateAt states "/s/a" :? PassedTestNodeStateProperty) "the leaf that ran keeps its result"
+            Expect.isTrue (stateAt states "/s/b" :? SkippedTestNodeStateProperty) "skipped, not failed"
+            Expect.stringContains (stateAt states "/s/b").Explanation "stopped" "the explanation names the stop"
+        }
+
+        test "a stop already requested skips every leaf" {
+            let stop = GracefulStop()
+            stop.Request()
+            let log = ResizeArray<string>()
+
+            let tree =
+                Test.list "s" [ Test.case "a" (fun () -> log.Add "a"); Test.case "b" (fun () -> log.Add "b") ]
+
+            let states = runSuiteStopping stop false tree
+
+            Expect.isEmpty (List.ofSeq log) "no body ran"
+            Expect.equal (Map.count states) 2 "both leaves still reach a terminal state"
+            Expect.isTrue (stateAt states "/s/a" :? SkippedTestNodeStateProperty) "the first leaf is skipped"
+            Expect.isTrue (stateAt states "/s/b" :? SkippedTestNodeStateProperty) "the second leaf is skipped"
+        }
+
+        test "a pending leaf keeps its own reason under a stop" {
+            let stop = GracefulStop()
+            stop.Request()
+
+            let states = runSuiteStopping stop false (Test.list "s" [ Test.pending "a" noop ])
+
+            Expect.equal (stateAt states "/s/a").Explanation "pending" "the source marking wins"
+        }
+
+        test "a fixture group not yet entered when the stop arrives runs neither setup nor teardown" {
+            let stop = GracefulStop()
+            let log = ResizeArray<string>()
+
+            let tree =
+                Test.sequentialList "root" [
+                    Test.case "first" (fun () -> stop.Request())
+                    Test.listWith (
+                        "s",
+                        (fun () -> async { log.Add "setup" }),
+                        (fun () -> async { log.Add "teardown" })
+                    )
+                        (fun _ -> [ Test.case "a" (fun () -> log.Add "a") ])
+                ]
+
+            let states = runSuiteStopping stop false tree
+
+            Expect.isEmpty (List.ofSeq log) "the fixture stayed unused"
+            Expect.isTrue (stateAt states "/root/s/a" :? SkippedTestNodeStateProperty) "the leaf under it is skipped"
         }
     ]

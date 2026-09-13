@@ -1,14 +1,8 @@
 module Partas.Testing.Tests.Main
 
-open System.Threading
 open Expecto
 
+// The thread pool floor this suite needs is raised in Fakes.fs, on the path every nested run
+// takes: the test SDK's adapter hosts this assembly without calling this entry point.
 [<EntryPoint>]
-let main argv =
-    // Expecto runs its own tests concurrently and each one blocks its worker on the inner
-    // runner, so a suite's leaves need workers beyond the pool's default floor. Raising the
-    // floor hands them over immediately rather than at the injection rate.
-    let workers, completionPorts = ThreadPool.GetMinThreads()
-    ThreadPool.SetMinThreads(max workers 64, completionPorts) |> ignore
-
-    runTestsInAssemblyWithCLIArgs [] argv
+let main argv = runTestsInAssemblyWithCLIArgs [] argv

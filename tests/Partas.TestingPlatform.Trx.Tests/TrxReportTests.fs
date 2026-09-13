@@ -92,6 +92,23 @@ let enableTests =
             Expect.equal (definition |> FrameworkDefinition.builderExtensions).Length 1 "one builder extension added"
         }
 
+        test "puts a grouping name on every reported outcome" {
+            let leaf: ExecutableLeaf<unit> =
+                { Node = { Uid = "/parser/literals/a"; Name = "a"; Location = None; Properties = [] }
+                  Parent = Some "/parser/literals"
+                  Payload = () }
+
+            let contributed =
+                TrxReport.enable FrameworkDefinition.empty<unit>
+                |> FrameworkDefinition.leafProperties
+                |> (fun contribute -> contribute leaf)
+
+            match contributed with
+            | [ :? TrxFullyQualifiedTypeNameProperty as name ] ->
+                Expect.equal name.FullyQualifiedTypeName "parser/literals" "the containing group's path"
+            | other -> failtestf "expected one TRX grouping name, got %A" other
+        }
+
         test "does not discard previously declared capabilities or builder extensions" {
             let definition =
                 testFramework<unit> { capabilities [ TrxReport.capability ] }

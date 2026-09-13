@@ -1,4 +1,4 @@
-﻿#r "nuget: Partas.Build, 0.4.0-alpha.3"
+#r "nuget: Partas.Build, 0.4.0-alpha.3"
 #r "nuget: Partas.TypeProvider.BuildHelper, 0.2.5"
 #r "nuget: Fake.IO.FileSystem"
 #r "nuget: Str"
@@ -30,7 +30,6 @@ module Spec =
 
     let projects = Repo.Project.AllProjects()
     let sourceProjects = projects |> List.filter _.RelativePath.StartsWith("src")
-    let testProjects = projects |> List.filter _.RelativePath.StartsWith("tests")
     let sourceProjectsMap =
         sourceProjects
         |> List.map (
@@ -185,10 +184,9 @@ module Stage =
         return stage "run tests" {
             quiet
             when' (not skipTests)
-            for { Name = name; Path = path } in Spec.testProjects do
-            stage $"run {name}" {
-                run (cmd $"dotnet test {path} -c {config} -v q")
-            }
+            // One invocation over the solution: every project under tests/ carries the test SDK,
+            // so this is both the command CI runs and the command that covers every assembly.
+            run (cmd $"dotnet test {Repo.Project.SolutionFile} -c {config} -v q")
         }
     }
 

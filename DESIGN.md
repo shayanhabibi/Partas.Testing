@@ -134,6 +134,19 @@ arity, parameter type full names, and return type full name, none of which a clo
 `TrxFullyQualifiedTypeNameProperty` covers TRX grouping with one honest string when the TRX
 package is in play.
 
+**`Timeout` is modelled and unreachable.** The binding maps it to
+`TimeoutTestNodeStateProperty`, and a framework constructing that case gets a correct platform
+report. Neither `Partas.TestingPlatform` nor `Partas.Testing` has a timeout mechanism: nothing
+imposes a deadline on a test body, so nothing produces the case. The case exists so a framework
+that adds its own deadline has a state to report through; a suite hanging on a wedged body hangs
+the run until the platform's own deadline or an operator kills it.
+
+**A hanging teardown outlives cancellation.** `Partas.Testing` runs fixture teardown under
+`CancellationToken.None`, so a `Ctrl-C`'d run still releases what setup acquired. A teardown that
+never returns therefore keeps the process alive past the interrupt, and the operator's only
+recourse is killing it. Releasing the resource is worth the risk; a bounded teardown wait would
+need the timeout mechanism above.
+
 ## 5. Discovery
 
 The binding walks the resolved tree and publishes every node. Parent links come from
@@ -160,6 +173,33 @@ retry all stay with the framework.
 
 `IMessageBus.PublishAsync` is safe under concurrent callers, so the reporter publishes
 directly.
+
+A reporter takes a per-leaf property contribution, `ExecutableLeaf<unit> -> IProperty list`, held
+on `FrameworkDefinition.LeafProperties` and composed through
+`FrameworkDefinition.addLeafProperties`. The contribution runs once per reported outcome and its
+properties join the published node. It exists for a companion package whose writer demands a
+property on every result: `Partas.TestingPlatform.Trx`'s writer raises on a result carrying no
+`TrxFullyQualifiedTypeNameProperty`, so `TrxReport.enable` contributes one and every framework
+built on the binding gets a working `--report-trx` without its own walk naming TRX.
+
+**Degree of parallelism is unbounded.** `Runner.run` roots the walk at `TestMode.Parallel`, a
+parallel group starts every child at once, and `Test.case` wraps a synchronous body in an
+`async`, so a blocking body holds a thread pool worker for its whole duration. A suite of
+blocking bodies wide enough drains the pool, and the runtime injects replacement workers at a
+rate of roughly one or two per second, so the run degrades to that rate until the first bodies
+return. The framework has no degree-of-parallelism setting: the default degree, whether the bound
+is per group or global, and how a user configures it are a design question this slice does not
+answer.
+
+Available today:
+
+- `Test.sequentialList` bounds a group to one body at a time, and descendants inherit the mode,
+  so wrapping a suite of blocking bodies in one caps that subtree at a single worker.
+- `Test.caseAsync` with a genuinely asynchronous body releases its worker at every `do!`.
+- `ThreadPool.SetMinThreads` raises the floor so the pool hands workers over immediately rather
+  than at the injection rate. This repository's own Expecto suite does exactly that in
+  `tests/Partas.Testing.Tests/Fakes.fs`, where every nested run starts from a worker its Expecto
+  test already holds.
 
 Before execution begins the binding publishes every surviving group node — the ancestors of
 leaves that passed the filter, and only those. Ancestors precede descendants, so no
@@ -215,7 +255,13 @@ System.CommandLine dependency.
 - `IBannerMessageOwnerCapability` — optional CE operation; returning `None` yields the
   platform banner.
 - `IGracefulStopTestExecutionResultCapability` — implemented, paired with the
-  maximum-failed-tests registration.
+  maximum-failed-tests registration. Every definition declares it, whether or not it declares
+  capabilities of its own. Both its own `TryStopTestExecutionAsync` and the inherited
+  `StopTestExecutionAsync` set the `GracefulStop` latch on `RunContext`, and the former reports
+  `true`, holding the platform to its graceful path so tests already running reach their own end.
+  Honouring the latch is the framework's: `Partas.Testing` reads it before each leaf, reports
+  every remaining one `Skipped`, and leaves a fixture group it has not yet entered unused, while a
+  group already bracketing its leaves still tears down.
 - `ITrxReportCapability` — `Partas.TestingPlatform.Trx`, so the core takes no extra
   Microsoft dependency. The capability alone does not write a report: `.Abstractions` declares
   the contract, but the writer that acts on it ships in the sibling `Microsoft.Testing.Extensions.TrxReport`
@@ -247,8 +293,26 @@ Entry points are hand-written:
 
 ```fsharp
 [<EntryPoint>]
-let main argv = Partas.Testing.run argv tests
+let main argv = runTestsWithArgs argv (fun () -> suite)
 ```
+
+`Partas.Testing` fixes its own `uid`, `version`, `displayName` and `description`: they identify
+the framework to the platform, not the suite, and a per-suite uid would change the identity
+`--info`, telemetry and artifact metadata key on. Everything else about the definition is open
+through `testSuite`, which returns the `FrameworkDefinition` the one-liner would have run, for a
+suite that registers a companion package or declares command-line options of its own:
+
+```fsharp
+[<EntryPoint>]
+let main argv =
+    testSuite (fun () -> suite)
+    |> TrxReport.enable
+    |> TestApplication.run argv
+```
+
+`FrameworkDefinition.addCapability`, `addCommandLineOptionsProvider` and `addLeafProperties` are
+the definition-to-definition counterparts of the CE operations, each appending to what the
+definition already declares. `samples/Partas.Testing.Sample` runs the TRX form above.
 
 The binding's package sets `GenerateTestingPlatformEntryPoint=false` — MTP's generator emits
 C#.

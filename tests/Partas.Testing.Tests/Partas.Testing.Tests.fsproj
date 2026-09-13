@@ -17,6 +17,7 @@
         <Compile Include="ExpectTests.fs"/>
         <Compile Include="FixtureTests.fs"/>
         <Compile Include="ParallelTests.fs"/>
+        <Compile Include="EndToEndTests.fs"/>
         <Compile Include="Main.fs"/>
     </ItemGroup>
 
@@ -29,6 +30,10 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Partas.Testing\Partas.Testing.fsproj" />
+        <!-- Referenced (not opened) so the end-to-end tests in EndToEndTests.fs can launch it
+             out-of-process: this expresses the build dependency and copies the sample's dll
+             next to this project's own output, at any configuration. -->
+        <ProjectReference Include="..\..\samples\Partas.Testing.Sample\Partas.Testing.Sample.fsproj" />
     </ItemGroup>
 
 </Project>

@@ -155,3 +155,19 @@ let tests =
             | other -> failtestf "expected a located group, got %A" other
         }
     ]
+
+
+[<Tests>]
+let entryTests =
+    testList "Entry.testSuite" [
+        test "the suite stays unbuilt until the platform asks for it" {
+            let mutable builds = 0
+
+            testSuite (fun () ->
+                builds <- builds + 1
+                Test.list "s" [])
+            |> ignore
+
+            Expect.equal builds 0 "declaring the suite builds nothing"
+        }
+    ]

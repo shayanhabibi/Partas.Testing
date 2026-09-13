@@ -48,10 +48,24 @@ type StubProducer() =
         member _.IsEnabledAsync() = Task.FromResult true
 
 /// <summary>
-/// Runs a suite through the runner under the given session cancellation, and returns every
-/// message the run published.
+/// Raises the thread pool's floor to 64 workers, once per process. Compensates the limitation
+/// recorded in DESIGN.md §6: a synchronous test body holds a pool worker for its whole duration,
+/// and enough of them together drain the pool faster than the runtime injects replacements. Every
+/// nested run below starts from a worker the Expecto test blocking on it already holds, so the
+/// floor is raised here rather than in the entry point, which the test SDK's adapter never calls.
 /// </summary>
-let runSuiteUpdatesUnder (cancellation: CancellationToken) filterApplied tree =
+let private threadPoolFloor =
+    lazy
+        (let workers, completionPorts = ThreadPool.GetMinThreads()
+         ThreadPool.SetMinThreads(max workers 64, completionPorts) |> ignore)
+
+/// <summary>
+/// Runs a suite through the runner under the given session cancellation and graceful stop, and
+/// returns every message the run published.
+/// </summary>
+let runSuiteUpdatesStopping (stop: GracefulStop) (cancellation: CancellationToken) filterApplied tree =
+    threadPoolFloor.Force()
+
     let resolved =
         match TestTree.resolve tree with
         | Ok resolved -> resolved
@@ -65,11 +79,19 @@ let runSuiteUpdatesUnder (cancellation: CancellationToken) filterApplied tree =
           Reporter = Reporter(bus, StubProducer(), SessionUid "session")
           CancellationToken = cancellation
           FilterApplied = filterApplied
-          CommandLineOptions = NoCommandLineOptions() }
+          CommandLineOptions = NoCommandLineOptions()
+          GracefulStop = stop }
 
     (Runner.run context).GetAwaiter().GetResult()
 
     bus.Updates
+
+/// <summary>
+/// Runs a suite through the runner under the given session cancellation, and returns every
+/// message the run published.
+/// </summary>
+let runSuiteUpdatesUnder (cancellation: CancellationToken) filterApplied tree =
+    runSuiteUpdatesStopping (GracefulStop()) cancellation filterApplied tree
 
 /// <summary>Runs a suite through the runner and returns every message the run published.</summary>
 let runSuiteUpdates filterApplied tree =
@@ -105,3 +127,12 @@ let runSuiteUnder cancellation filterApplied tree =
 /// <summary>Runs a suite through the runner and returns the terminal state of every leaf.</summary>
 let runSuite filterApplied tree =
     runSuiteUnder CancellationToken.None filterApplied tree
+
+/// <summary>
+/// Runs a suite through the runner under the given graceful stop, and returns the terminal state
+/// of every leaf.
+/// </summary>
+let runSuiteStopping stop filterApplied tree =
+    runSuiteUpdatesStopping stop CancellationToken.None filterApplied tree
+    |> terminalUpdates
+    |> Map.map (fun _ update -> stateOf update)

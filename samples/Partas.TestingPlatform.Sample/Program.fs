@@ -43,9 +43,9 @@ let runTests (context: RunContext<Body>) : Task =
         | false, _ -> printfn "my-custom-filter not set"
 
         for leaf in context.Leaves do
-            let body _ =
-                let result = TestResult.create (leaf.Payload ())
-                Task.FromResult { result with ExtraProperties = [ TrxReport.fullyQualifiedTypeName leaf ] }
+            // TrxReport.enable puts the grouping name TRX requires on every outcome, so the
+            // walk itself reports nothing TRX-specific.
+            let body _ = Task.FromResult(TestResult.create (leaf.Payload ()))
 
             let! _ = context.Reporter.Run(leaf, body, context.CancellationToken)
             ()
