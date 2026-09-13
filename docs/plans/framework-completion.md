@@ -175,3 +175,55 @@ TRX grouping has an honest value — the spec forbids fabricating `TestMethodIde
 
 **Verify end to end:** run a sample with `--report-trx` and confirm a TRX file is written with the
 expected test names. Record the observed output.
+
+---
+
+## Task 2b: partial-application DSL
+
+Change every constructor in `src/Partas.Testing/Dsl.fs` from tupled to partial-application shape, so
+call sites read like Expecto.
+
+Before: `Test.case ("parses an int", fun () -> ())`
+After:  `Test.case "parses an int" (fun () -> ())`
+
+The member declares **only** the name plus the caller-info optionals, and returns a function:
+
+```fsharp
+static member case (name: string, [<CallerFilePath>] ?file: string, [<CallerLineNumber>] ?line: int) =
+    fun (body: unit -> unit) -> Leaf(name, locate file line, [], async { return body () })
+```
+
+Verified by probe: this captures the correct call-site line under juxtaposition
+(`Test.case "n" (fun () -> ())`) and under pipelining (`body |> Test.case "n"`).
+
+**The trap, also verified:** any `let`-bound wrapper bakes in the *library's* line, not the caller's.
+`let testCase name body = Test.case name body` captured the line of that binding for every call.
+So there must be no module-level alias, and the `Test.` prefix stays.
+
+Apply to `case`, `caseAsync`, `focused`, `pending`, `list`, `focusedList`, `pendingList`, and
+`listWith`. `listWith` has four leading arguments (name, setup, teardown, children) — keep
+name+setup+teardown+caller-info in the member and return a function taking `children`, or keep it
+tupled if the mixed form reads worse; state which you chose and why.
+
+Update every call site: `tests/Partas.Testing.Tests/` (Tests.fs, FocusTests.fs, RunnerTests.fs,
+FixtureTests.fs) and `samples/Partas.Testing.Sample/Program.fs`.
+
+Line numbers are asserted in `Tests.fs` ("a case records the line it was written on"). Those
+assertions must still hold and must still be capturing the *call site*, not a fixed number — do not
+simply update a constant to make a test pass.
+
+## Task 2c: cancellation reports Skipped
+
+`DESIGN.md` decision 20 and §4.4 say a body cancelled on the session token reports `Skipped` with an
+explanation. The framework reports `Failed` carrying a `TaskCanceledException`, in two places:
+`Runner.fs`'s `execute` (a cancelled leaf body) and the setup call (a session cancelled before or
+during setup). Teardown was already detached from the session token in task 2 and is not affected.
+
+Make cancellation on the session token report `Skipped` with an explanation naming cancellation, for
+leaf bodies and for fixture setup alike. A cancellation that is *not* the session token's — an
+`OperationCanceledException` the test itself threw for its own reasons — must still report `Failed`;
+distinguish them by checking the token.
+
+Also correct `DESIGN.md` §6: it says children of a failed-setup group "report `Skipped` naming the
+group's UID", but source-deactivated children now correctly report their own reason instead. Qualify
+the sentence to defer to §7.
