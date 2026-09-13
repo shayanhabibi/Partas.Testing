@@ -20,7 +20,9 @@ type RunContext<'T> =
     { Tree: ResolvedTestTree<'T>
       Leaves: ExecutableLeaf<'T> list
       Reporter: Reporter
-      CancellationToken: CancellationToken }
+      CancellationToken: CancellationToken
+      /// <summary>Whether the platform narrowed this run, rather than asking for everything.</summary>
+      FilterApplied: bool }
 
 type FrameworkDefinition<'T> =
     { Uid: string
@@ -91,7 +93,8 @@ type Framework<'T>(definition: FrameworkDefinition<'T>) =
                                     { Tree = surviving
                                       Leaves = Execution.leaves surviving
                                       Reporter = Reporter(context.MessageBus, producer, session)
-                                      CancellationToken = context.CancellationToken }
+                                      CancellationToken = context.CancellationToken
+                                      FilterApplied = not (request.Filter :? NopFilter) }
 
                                 do! definition.RunTests runContext
                     | _ -> ()

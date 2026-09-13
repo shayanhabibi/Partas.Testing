@@ -10,7 +10,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Fakes.fs"/>
         <Compile Include="Tests.fs"/>
+        <Compile Include="FocusTests.fs"/>
+        <Compile Include="RunnerTests.fs"/>
         <Compile Include="Main.fs"/>
     </ItemGroup>
 

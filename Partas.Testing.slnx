@@ -21,6 +21,7 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Partas.TestingPlatform.Sample/Partas.TestingPlatform.Sample.fsproj" />
+    <Project Path="samples/Partas.Testing.Sample/Partas.Testing.Sample.fsproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Partas.TestingPlatform.Tests/Partas.TestingPlatform.Tests.fsproj" />
