@@ -16,6 +16,8 @@
         <Compile Include="DiscoveryTests.fs"/>
         <Compile Include="FilteringTests.fs"/>
         <Compile Include="OutcomeTests.fs"/>
+        <Compile Include="ExecutionTests.fs"/>
+        <Compile Include="ReporterTests.fs"/>
         <Compile Include="Main.fs"/>
     </ItemGroup>
 

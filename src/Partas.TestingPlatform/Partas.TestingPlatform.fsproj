@@ -12,8 +12,11 @@
     <ItemGroup>
         <Compile Include="TestTree.fs"/>
         <Compile Include="Outcome.fs"/>
+        <Compile Include="Nodes.fs"/>
         <Compile Include="Filtering.fs"/>
         <Compile Include="Discovery.fs"/>
+        <Compile Include="Execution.fs"/>
+        <Compile Include="Reporter.fs"/>
         <None Include="../../README.md" Pack="true" PackagePath="\"/>
     </ItemGroup>
 
