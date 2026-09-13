@@ -1,7 +1,7 @@
 module Partas.Testing.Tests.ExpectTests
 
-open Expecto
 open Partas.Testing
+open Expecto
 
 let private raised f : exn option =
     try
@@ -41,24 +41,48 @@ let tests =
             Partas.Testing.Expect.notEqual 1 2 "differ"
         }
 
+        test "isTrue passes on true" {
+            Partas.Testing.Expect.isTrue true "truthy"
+        }
+
         test "isTrue fails on false" {
             Expect.isSome (raised (fun () -> Partas.Testing.Expect.isTrue false "truthy")) "raised"
+        }
+
+        test "isFalse passes on false" {
+            Partas.Testing.Expect.isFalse false "falsy"
         }
 
         test "isFalse fails on true" {
             Expect.isSome (raised (fun () -> Partas.Testing.Expect.isFalse true "falsy")) "raised"
         }
 
+        test "isSome passes on Some" {
+            Partas.Testing.Expect.isSome (Some 1) "present"
+        }
+
         test "isSome fails on None" {
             Expect.isSome (raised (fun () -> Partas.Testing.Expect.isSome None "present")) "raised"
+        }
+
+        test "isNone passes on None" {
+            Partas.Testing.Expect.isNone None "absent"
         }
 
         test "isNone fails on Some" {
             Expect.isSome (raised (fun () -> Partas.Testing.Expect.isNone (Some 1) "absent")) "raised"
         }
 
+        test "isOk passes on Ok" {
+            Partas.Testing.Expect.isOk (Ok 1) "ok"
+        }
+
         test "isOk fails on Error" {
             Expect.isSome (raised (fun () -> Partas.Testing.Expect.isOk (Error "e") "ok")) "raised"
+        }
+
+        test "isError passes on Error" {
+            Partas.Testing.Expect.isError (Error "e") "error"
         }
 
         test "isError fails on Ok" {
