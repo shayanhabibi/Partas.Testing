@@ -10,6 +10,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="AssemblyInfo.fs"/>
         <Compile Include="TestTree.fs"/>
         <Compile Include="Outcome.fs"/>
         <Compile Include="Nodes.fs"/>

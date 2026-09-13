@@ -1,5 +1,6 @@
 namespace Partas.TestingPlatform.Trx
 
+open Microsoft.Testing.Extensions
 open Microsoft.Testing.Extensions.TrxReport.Abstractions
 open Microsoft.Testing.Platform.Capabilities.TestFramework
 open Microsoft.Testing.Platform.Extensions.Messages
@@ -18,8 +19,21 @@ module TrxReport =
     let capability () : ITestFrameworkCapability = TrxReportCapability() :> ITestFrameworkCapability
 
     /// <summary>
-    /// A <c>TrxFullyQualifiedTypeNameProperty</c> carrying the node's own uid, without its
-    /// leading separator, as the type name TRX groups results under.
+    /// A <c>TrxFullyQualifiedTypeNameProperty</c> carrying the group holding the leaf, without
+    /// its leading separator, as the type name TRX groups results under. A root-level leaf
+    /// carries an empty type name.
     /// </summary>
-    let fullyQualifiedTypeName (node: ResolvedNode) : IProperty =
-        TrxFullyQualifiedTypeNameProperty(node.Uid.TrimStart TestTree.Separator) :> IProperty
+    let fullyQualifiedTypeName (leaf: ExecutableLeaf<'T>) : IProperty =
+        let group = leaf.Parent |> Option.defaultValue ""
+        TrxFullyQualifiedTypeNameProperty(group.TrimStart TestTree.Separator) :> IProperty
+
+    /// <summary>
+    /// Adds the TRX capability and registers <c>Microsoft.Testing.Extensions.TrxReport</c>'s
+    /// writer with the builder, so <c>--report-trx</c> both parses and produces a report.
+    /// </summary>
+    let enable (definition: FrameworkDefinition<'T>) : FrameworkDefinition<'T> =
+        { definition with
+            Capabilities = definition.Capabilities @ [ capability ]
+            BuilderExtensions =
+                definition.BuilderExtensions
+                @ [ BuilderExtension.create (fun builder -> builder.AddTrxReportProvider() |> ignore) ] }

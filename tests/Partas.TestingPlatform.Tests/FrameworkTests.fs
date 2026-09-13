@@ -5,6 +5,7 @@ module Partas.TestingPlatform.Tests.FrameworkTests
 open System.Collections.Generic
 open System.Threading.Tasks
 open Expecto
+open Microsoft.Testing.Platform.Builder
 open Microsoft.Testing.Platform.Capabilities.TestFramework
 open Microsoft.Testing.Platform.CommandLine
 open Microsoft.Testing.Platform.Extensions
@@ -104,28 +105,60 @@ let capabilitiesTests =
             Expect.equal capabilities.Count 1 "only the declared capability"
             Expect.isTrue (obj.ReferenceEquals(Seq.head capabilities, stub)) "declared capability present"
         }
+
+        test "a capability factory is invoked once, not on every read of Capabilities" {
+            let mutable invocations = 0
+
+            let factory () =
+                invocations <- invocations + 1
+                StubCapability() :> ITestFrameworkCapability
+
+            let definition = { FrameworkDefinition.empty<int> with Capabilities = [ factory ] }
+            let capabilities = FrameworkCapabilities definition :> ITestFrameworkCapabilities
+
+            capabilities.Capabilities |> ignore
+            capabilities.Capabilities |> ignore
+
+            Expect.equal invocations 1 "factory invoked once despite two reads"
+        }
     ]
 
 [<Tests>]
 let builderExtensionsTests =
-    testList "FrameworkDefinition.builderExtensions" [
+    testList "FrameworkDefinition.BuilderExtensions" [
         test "an empty definition carries no builder extensions" {
             Expect.isEmpty FrameworkDefinition.empty<int>.BuilderExtensions "no builder extensions by default"
         }
 
-        test "the CE operation records the given builder extension actions" {
-            let action (_: Microsoft.Testing.Platform.Builder.ITestApplicationBuilder) = ()
-
-            let definition =
-                testFramework<int> {
-                    uid "x"
-                    builderExtensions [ action ]
-                }
+        test "BuilderExtensions.set records the given actions" {
+            let extension = BuilderExtension.create (fun _ -> ())
+            let definition = FrameworkDefinition.empty<int> |> BuilderExtensions.set [ extension ]
 
             Expect.equal definition.BuilderExtensions.Length 1 "one action recorded"
+        }
 
-            Expect.isTrue
-                (obj.ReferenceEquals(definition.BuilderExtensions.[0], action))
-                "same action retained"
+        test "BuilderExtensions.run invokes every declared action" {
+            let mutable calls = 0
+            let extension = BuilderExtension.create (fun _ -> calls <- calls + 1)
+
+            let definition =
+                FrameworkDefinition.empty<int> |> BuilderExtensions.set [ extension; extension ]
+
+            definition |> BuilderExtensions.run Unchecked.defaultof<ITestApplicationBuilder>
+
+            Expect.equal calls 2 "both registered actions ran"
+        }
+
+        test "BuilderExtensions.run passes the given builder through to each action" {
+            let builder = Unchecked.defaultof<ITestApplicationBuilder>
+            let mutable seen = ValueNone
+            let extension = BuilderExtension.create (fun b -> seen <- ValueSome b)
+            let definition = FrameworkDefinition.empty<int> |> BuilderExtensions.set [ extension ]
+
+            definition |> BuilderExtensions.run builder
+
+            match seen with
+            | ValueSome received -> Expect.isTrue (obj.ReferenceEquals(received, builder)) "same builder reference reaches the action"
+            | ValueNone -> failtest "the action never ran"
         }
     ]

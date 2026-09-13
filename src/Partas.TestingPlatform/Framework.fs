@@ -29,6 +29,19 @@ type RunContext<'T> =
       /// <summary>MTP's parsed command-line options, for reading a declared option's value.</summary>
       CommandLineOptions: ICommandLineOptions }
 
+/// <summary>
+/// An action run on the builder before it builds, for a companion package to register onto
+/// <c>ITestApplicationBuilder</c> itself (e.g. TRX's report writer). An MTP builder
+/// registration can defer a closure's execution into the running session, reaching
+/// <c>IServiceProvider</c> and <c>IMessageBus</c> from there; construction is restricted to
+/// this binding's own companion packages, granted access through <c>InternalsVisibleTo</c>.
+/// </summary>
+type BuilderExtension = internal BuilderExtension of (ITestApplicationBuilder -> unit)
+
+module internal BuilderExtension =
+    let create (action: ITestApplicationBuilder -> unit) = BuilderExtension action
+    let invoke (builder: ITestApplicationBuilder) (BuilderExtension action) = action builder
+
 type FrameworkDefinition<'T> =
     { Uid: string
       Version: string
@@ -48,28 +61,25 @@ type FrameworkDefinition<'T> =
       /// its dependency.
       /// </summary>
       Capabilities: (unit -> ITestFrameworkCapability) list
-      /// <summary>
-      /// Actions run on the builder before it builds, for extension methods a companion
-      /// package registers onto <c>ITestApplicationBuilder</c> itself (e.g. TRX's report
-      /// writer). Runs at build time only; the running framework never sees the builder.
-      /// </summary>
-      BuilderExtensions: (ITestApplicationBuilder -> unit) list }
+      BuilderExtensions: BuilderExtension list }
 
 type private BannerCapability(message: string) =
     interface IBannerMessageOwnerCapability with
         member _.GetBannerMessageAsync() = Task.FromResult message
 
 type FrameworkCapabilities<'T>(definition: FrameworkDefinition<'T>) =
-    interface ITestFrameworkCapabilities with
-        member _.Capabilities =
-            let banner =
-                definition.Banner
-                |> Option.map (fun message -> BannerCapability message :> ITestFrameworkCapability)
-                |> Option.toList
+    let capabilities =
+        let banner =
+            definition.Banner
+            |> Option.map (fun message -> BannerCapability message :> ITestFrameworkCapability)
+            |> Option.toList
 
-            (banner @ List.map (fun factory -> factory ()) definition.Capabilities)
-            |> Array.ofList
-            :> IReadOnlyCollection<_>
+        (banner @ List.map (fun factory -> factory ()) definition.Capabilities)
+        |> Array.ofList
+        :> IReadOnlyCollection<_>
+
+    interface ITestFrameworkCapabilities with
+        member _.Capabilities = capabilities
 
 type Framework<'T>(definition: FrameworkDefinition<'T>) =
     let mutable resolved = Error "The test session has not been created."
@@ -182,14 +192,23 @@ type TestFrameworkBuilder<'T>() =
     member _.Capabilities(definition: FrameworkDefinition<'T>, factories) =
         { definition with Capabilities = factories }
 
-    /// <summary>Declares builder extension actions, replacing any previously declared.</summary>
-    [<CustomOperation "builderExtensions">]
-    member _.BuilderExtensions(definition: FrameworkDefinition<'T>, actions) =
-        { definition with BuilderExtensions = actions }
-
 [<AutoOpen>]
 module Builders =
     let testFramework<'T> = TestFrameworkBuilder<'T>()
+
+/// <summary>
+/// Sets <c>FrameworkDefinition.BuilderExtensions</c>, replacing any previously declared.
+/// <c>internal</c> for the same reason the field is: only a companion package this binding
+/// grants <c>InternalsVisibleTo</c> may reach the builder.
+/// </summary>
+module internal BuilderExtensions =
+    let set (actions: BuilderExtension list) (definition: FrameworkDefinition<'T>) =
+        { definition with BuilderExtensions = actions }
+
+    /// <summary>Runs every declared action on the builder, in declaration order.</summary>
+    let run (builder: ITestApplicationBuilder) (definition: FrameworkDefinition<'T>) =
+        for extension in definition.BuilderExtensions do
+            BuilderExtension.invoke builder extension
 
 module TestApplication =
 
@@ -222,8 +241,7 @@ module TestApplication =
             for factory in definition.CommandLineOptionsProviders do
                 builder.CommandLine.AddProvider(fun () -> factory ())
 
-            for extend in definition.BuilderExtensions do
-                extend builder
+            definition |> BuilderExtensions.run builder
 
             use! app = builder.BuildAsync()
             return! app.RunAsync()

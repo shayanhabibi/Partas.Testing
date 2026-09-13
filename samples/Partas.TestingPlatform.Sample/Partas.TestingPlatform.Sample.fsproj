@@ -13,12 +13,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <!-- Verification-only: the concrete TRX writer, so the report-trx flag has something
-             to bind to. Partas.TestingPlatform.Trx depends on the Abstractions package only. -->
-        <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="[2.4.0,3.0.0)" />
-    </ItemGroup>
-
-    <ItemGroup>
         <ProjectReference Include="..\..\src\Partas.TestingPlatform\Partas.TestingPlatform.fsproj"/>
         <ProjectReference Include="..\..\src\Partas.TestingPlatform.CommandLine\Partas.TestingPlatform.CommandLine.fsproj"/>
         <ProjectReference Include="..\..\src\Partas.TestingPlatform.Trx\Partas.TestingPlatform.Trx.fsproj"/>

@@ -18,7 +18,7 @@ VSTest's flat, attribute-shaped `TestCase` model.
 |---|---|---|
 | `Partas.TestingPlatform` | `Microsoft.Testing.Platform` only | the binding |
 | `Partas.TestingPlatform.CommandLine` | binding, `FSharp.SystemCommandLine` | option adapter |
-| `Partas.TestingPlatform.Trx` | binding, `Microsoft.Testing.Extensions.TrxReport.Abstractions` | TRX capability |
+| `Partas.TestingPlatform.Trx` | binding, `Microsoft.Testing.Extensions.TrxReport` | TRX capability and report registration |
 | `Partas.Testing` | binding | the framework |
 
 `TargetFrameworks` is `net8.0;net10.0`, set in `Directory.Build.props`. `PackageId` is
@@ -217,7 +217,15 @@ System.CommandLine dependency.
 - `IGracefulStopTestExecutionResultCapability` — implemented, paired with the
   maximum-failed-tests registration.
 - `ITrxReportCapability` — `Partas.TestingPlatform.Trx`, so the core takes no extra
-  Microsoft dependency.
+  Microsoft dependency. The capability alone does not write a report: `.Abstractions` declares
+  the contract, but the writer that acts on it ships in the sibling `Microsoft.Testing.Extensions.TrxReport`
+  package, which `Partas.TestingPlatform.Trx` references directly and registers through
+  `AddTrxReportProvider()`. Reaching the builder to call that registration is an
+  `internal`-only seam (`FrameworkDefinition.BuilderExtensions`, restricted to
+  `Partas.TestingPlatform.Trx` by `InternalsVisibleTo`) rather than a public CE operation — a
+  public one would let any consumer register a deferred `Func<IServiceProvider, _>` factory that
+  runs inside a session and reaches `IMessageBus`, the same escalation the core's public surface
+  otherwise closes off.
 
 ## 10. Hosting and identity
 

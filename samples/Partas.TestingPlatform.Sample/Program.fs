@@ -2,7 +2,6 @@ module Partas.TestingPlatform.Sample.Program
 
 open System.CommandLine
 open System.Threading.Tasks
-open Microsoft.Testing.Extensions
 open Partas.TestingPlatform
 open Partas.TestingPlatform.CommandLine
 open Partas.TestingPlatform.Trx
@@ -46,7 +45,7 @@ let runTests (context: RunContext<Body>) : Task =
         for leaf in context.Leaves do
             let body _ =
                 let result = TestResult.create (leaf.Payload ())
-                Task.FromResult { result with ExtraProperties = [ TrxReport.fullyQualifiedTypeName leaf.Node ] }
+                Task.FromResult { result with ExtraProperties = [ TrxReport.fullyQualifiedTypeName leaf ] }
 
             let! _ = context.Reporter.Run(leaf, body, context.CancellationToken)
             ()
@@ -61,7 +60,6 @@ let main argv =
         tests (fun () -> suite)
         onRun runTests
         commandLineOptions [ myCustomFilterProvider ]
-        capabilities [ TrxReport.capability ]
-        builderExtensions [ fun builder -> builder.AddTrxReportProvider() ]
     }
+    |> TrxReport.enable
     |> TestApplication.run argv
