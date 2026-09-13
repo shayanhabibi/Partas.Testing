@@ -9,8 +9,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Library.fs"/>
+        <Compile Include="Dsl.fs"/>
         <None Include="../../README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Partas.TestingPlatform\Partas.TestingPlatform.fsproj"/>
     </ItemGroup>
 
 </Project>
