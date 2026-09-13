@@ -19,6 +19,9 @@
     <Project Path="src/Partas.TestingPlatform/Partas.TestingPlatform.fsproj" />
     <Project Path="src/Partas.Testing/Partas.Testing.fsproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Partas.TestingPlatform.Sample/Partas.TestingPlatform.Sample.fsproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Partas.TestingPlatform.Tests/Partas.TestingPlatform.Tests.fsproj" />
     <Project Path="tests/Partas.Testing.Tests/Partas.Testing.Tests.fsproj" />

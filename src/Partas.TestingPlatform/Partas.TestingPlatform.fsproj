@@ -17,6 +17,8 @@
         <Compile Include="Discovery.fs"/>
         <Compile Include="Execution.fs"/>
         <Compile Include="Reporter.fs"/>
+        <Compile Include="Session.fs"/>
+        <Compile Include="Framework.fs"/>
         <None Include="../../README.md" Pack="true" PackagePath="\"/>
     </ItemGroup>
 
