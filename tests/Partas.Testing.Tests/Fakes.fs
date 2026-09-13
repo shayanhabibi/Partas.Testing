@@ -64,8 +64,11 @@ let runSuiteUpdatesUnder (cancellation: CancellationToken) filterApplied tree =
 let runSuiteUpdates filterApplied tree =
     runSuiteUpdatesUnder CancellationToken.None filterApplied tree
 
-/// <summary>The terminal, non-<c>InProgress</c> update published for a leaf, by uid.</summary>
-let terminalUpdates updates =
+/// <summary>
+/// Every terminal, non-<c>InProgress</c> update published, paired with its uid, in publication
+/// order. A uid reported twice appears twice.
+/// </summary>
+let terminalList updates =
     updates
     |> List.choose (fun (update: TestNodeUpdateMessage) ->
         let states: TestNodeStateProperty[] = update.TestNode.Properties.OfType()
@@ -73,15 +76,20 @@ let terminalUpdates updates =
         match Array.tryHead states with
         | Some state when not (state :? InProgressTestNodeStateProperty) -> Some(update.TestNode.Uid.Value, update)
         | _ -> None)
-    |> Map.ofList
+
+/// <summary>The terminal, non-<c>InProgress</c> update published for a leaf, by uid.</summary>
+let terminalUpdates updates = terminalList updates |> Map.ofList
+
+/// <summary>The state property an update carries.</summary>
+let stateOf (update: TestNodeUpdateMessage) =
+    let states: TestNodeStateProperty[] = update.TestNode.Properties.OfType()
+    states.[0]
 
 /// <summary>Runs a suite through the runner and returns the terminal state of every leaf.</summary>
 let runSuiteUnder cancellation filterApplied tree =
     runSuiteUpdatesUnder cancellation filterApplied tree
     |> terminalUpdates
-    |> Map.map (fun _ update ->
-        let states: TestNodeStateProperty[] = update.TestNode.Properties.OfType()
-        states.[0])
+    |> Map.map (fun _ update -> stateOf update)
 
 /// <summary>Runs a suite through the runner and returns the terminal state of every leaf.</summary>
 let runSuite filterApplied tree =

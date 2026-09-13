@@ -192,16 +192,20 @@ let tests =
             Expect.sequenceEqual (List.ofSeq log) [ "setup"; "a"; "teardown" ] "the order run"
         }
 
-        test "every leaf of a parallel group reaches a terminal state" {
+        test "every leaf of a parallel group is reported exactly once" {
             let tree =
                 Test.parallelList "s" [
                     for index in 1..32 -> Test.case (string index) noop
                 ]
 
-            let states = runSuite false tree
+            let terminal = runSuiteUpdates false tree |> terminalList
 
-            Expect.equal (Map.count states) 32 "one terminal state per leaf"
-            Expect.isTrue (states |> Map.forall (fun uid _ -> passed states uid)) "every leaf passed"
+            Expect.equal (List.length terminal) 32 "one terminal update per leaf"
+            Expect.equal (List.length (List.distinct (List.map fst terminal))) 32 "each uid reported once"
+
+            Expect.isTrue
+                (terminal |> List.forall (fun (_, update) -> stateOf update :? PassedTestNodeStateProperty))
+                "every leaf passed"
         }
 
         test "a parallel group reports the outcomes its sequential twin reports" {
@@ -219,7 +223,7 @@ let tests =
             Expect.equal concurrent ordered "the same outcome per uid"
         }
 
-        test "a body cancelled on the session token inside a parallel group is reported skipped" {
+        test "a leaf not yet started when the session is already cancelled is reported skipped" {
             use source = new CancellationTokenSource()
             source.Cancel()
 
@@ -229,6 +233,81 @@ let tests =
             let states = runSuiteUnder source.Token false tree
 
             Expect.isTrue (states.["/s/a"] :? SkippedTestNodeStateProperty) "skipped, not failed"
+        }
+
+        test "a leaf awaiting when a sibling cancels the session is reported skipped" {
+            use source = new CancellationTokenSource()
+            let started = new SemaphoreSlim(0)
+            let cancelled = new SemaphoreSlim(0)
+
+            let tree =
+                Test.parallelList "s" [
+                    Test.caseAsync "waits" (async {
+                        started.Release() |> ignore
+                        let! _ = cancelled.WaitAsync patient |> Async.AwaitTask
+                        do! Async.Sleep 20
+                    })
+                    Test.caseAsync "cancels" (async {
+                        let! _ = started.WaitAsync patient |> Async.AwaitTask
+                        source.Cancel()
+                        cancelled.Release() |> ignore
+                    })
+                ]
+
+            let states = runSuiteUnder source.Token false tree
+
+            Expect.isTrue
+                (states.["/s/waits"] :? SkippedTestNodeStateProperty)
+                "the leaf that was mid-flight"
+        }
+
+        test "a leaf inside a synchronous body when a sibling cancels the session is reported skipped" {
+            use source = new CancellationTokenSource()
+            let started = new SemaphoreSlim(0)
+            let cancelled = new SemaphoreSlim(0)
+
+            let tree =
+                Test.parallelList "s" [
+                    Test.case "computes" (fun () ->
+                        started.Release() |> ignore
+                        cancelled.Wait patient |> ignore)
+                    Test.caseAsync "cancels" (async {
+                        let! _ = started.WaitAsync patient |> Async.AwaitTask
+                        source.Cancel()
+                        cancelled.Release() |> ignore
+                    })
+                ]
+
+            let states = runSuiteUnder source.Token false tree
+
+            Expect.isTrue
+                (states.["/s/computes"] :? SkippedTestNodeStateProperty)
+                "the token is read once more after the body returns"
+        }
+
+        test "a leaf that finished before a sibling cancels the session keeps its result" {
+            use source = new CancellationTokenSource()
+            let reported = new SemaphoreSlim(0)
+
+            // Teardown runs after the group's last leaf was reported, so releasing there orders
+            // the cancellation strictly after the terminal update for "early".
+            let tree =
+                Test.parallelList "s" [
+                    Test.listWith ("finished", (fun () -> idle ()), (fun () -> async { reported.Release() |> ignore }))
+                        (fun _ -> [ Test.case "early" noop ])
+                    Test.caseAsync "cancels" (async {
+                        let! _ = reported.WaitAsync patient |> Async.AwaitTask
+                        source.Cancel()
+                    })
+                ]
+
+            let updates = runSuiteUpdatesUnder source.Token false tree
+            let terminal = terminalList updates |> List.filter (fun (uid, _) -> uid = "/s/finished/early")
+
+            match terminal with
+            | [ (_, update) ] ->
+                Expect.isTrue (stateOf update :? PassedTestNodeStateProperty) "the leaf that had already finished"
+            | other -> failtestf "expected one terminal update, got %i" (List.length other)
         }
 
         test "a body raising its own cancellation inside a parallel group is reported failed" {
