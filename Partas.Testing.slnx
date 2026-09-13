@@ -20,6 +20,7 @@
     <Project Path="src/Partas.Testing/Partas.Testing.fsproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Partas.TestingPlatform.Tests/Partas.TestingPlatform.Tests.fsproj" />
     <Project Path="tests/Partas.Testing.Tests/Partas.Testing.Tests.fsproj" />
   </Folder>
   <!--#if (!Docs_none) -->

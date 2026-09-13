@@ -1,15 +1,17 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
-    <!-- Still the proof of concept. The vertical slice turns this into the packaged library. -->
     <PropertyGroup>
-        <OutputType>Exe</OutputType>
         <TargetFrameworks>$(PartasTargetFrameworks)</TargetFrameworks>
         <LangVersion>latest</LangVersion>
-        <IsPackable>false</IsPackable>
+        <PackageId>Partas.TestingPlatform</PackageId>
+        <Title>Partas.TestingPlatform</Title>
+        <Description>An F# binding to Microsoft.Testing.Platform.</Description>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Program.fs"/>
+        <Compile Include="TestTree.fs"/>
+        <None Include="../../README.md" Pack="true" PackagePath="\"/>
     </ItemGroup>
 
     <ItemGroup>
