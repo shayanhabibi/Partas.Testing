@@ -1,7 +1,5 @@
 namespace Partas.TestingPlatform
 
-open System
-open System.Threading
 open System.Threading.Tasks
 open Microsoft.Testing.Platform.Extensions.Messages
 open Microsoft.Testing.Platform.Messages

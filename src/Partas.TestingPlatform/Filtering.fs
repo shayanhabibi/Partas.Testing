@@ -16,7 +16,7 @@ module Filtering =
     let rec toPredicate (filter: ITestExecutionFilter) : string -> PropertyBag -> bool =
         match filter with
         | :? TestNodeUidListFilter as filter ->
-            let admitted = filter.TestNodeUids |> Seq.map (fun uid -> uid.Value) |> Set.ofSeq
+            let admitted = filter.TestNodeUids |> Seq.map _.Value |> Set.ofSeq
             fun uid _ -> Set.contains uid admitted
         | :? TreeNodeFilter as filter -> fun uid properties -> filter.MatchesFilter(uid, properties)
         | :? CompositeTestExecutionFilter as filter ->

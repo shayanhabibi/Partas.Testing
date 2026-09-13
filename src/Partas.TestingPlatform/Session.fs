@@ -1,6 +1,5 @@
 namespace Partas.TestingPlatform
 
-open System
 open System.Threading
 open Microsoft.Testing.Platform.Extensions.TestFramework
 open Microsoft.Testing.Platform.TestHost
@@ -55,9 +54,9 @@ module Session =
             | Ok resolved -> Ok resolved
             | Error collisions ->
                 collisions
-                |> List.map (fun collision -> collision.Uid)
+                |> List.map _.Uid
                 |> String.concat ", "
                 |> sprintf "Duplicate test uids: %s"
                 |> Error
         with error ->
-            Error(sprintf "The test tree could not be built: %s" error.Message)
+            Error $"The test tree could not be built: {error.Message}"
