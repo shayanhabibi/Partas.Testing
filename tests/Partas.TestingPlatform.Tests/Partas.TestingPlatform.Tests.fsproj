@@ -14,6 +14,7 @@
         <Compile Include="Generators.fs"/>
         <Compile Include="TestTreeTests.fs"/>
         <Compile Include="DiscoveryTests.fs"/>
+        <Compile Include="FilteringTests.fs"/>
         <Compile Include="Main.fs"/>
     </ItemGroup>
 
