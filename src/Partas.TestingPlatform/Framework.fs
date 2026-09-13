@@ -33,8 +33,15 @@ type RunContext<'T> =
 /// An action run on the builder before it builds, for a companion package to register onto
 /// <c>ITestApplicationBuilder</c> itself (e.g. TRX's report writer). An MTP builder
 /// registration can defer a closure's execution into the running session, reaching
-/// <c>IServiceProvider</c> and <c>IMessageBus</c> from there; construction is restricted to
-/// this binding's own companion packages, granted access through <c>InternalsVisibleTo</c>.
+/// <c>IServiceProvider</c> and <c>IMessageBus</c> from there. Construction is limited to the
+/// assemblies this binding names in <c>InternalsVisibleTo</c> — an unsigned request, raising
+/// the bar against an accidental caller rather than closing the door on a deliberate one; an
+/// assembly compiled with a matching name gets the same access. The containing
+/// <c>FrameworkDefinition.BuilderExtensions</c> field stays a plain public list: a caller
+/// outside the grant can still replace it wholesale (e.g. with the empty list, silently
+/// disabling every extension) or copy one definition's list onto another, but cannot construct
+/// a new instance of this type to inject — the values it can move around are limited to ones a
+/// granted assembly already produced.
 /// </summary>
 type BuilderExtension = internal BuilderExtension of (ITestApplicationBuilder -> unit)
 

@@ -19,13 +19,13 @@ module TrxReport =
     let capability () : ITestFrameworkCapability = TrxReportCapability() :> ITestFrameworkCapability
 
     /// <summary>
-    /// A <c>TrxFullyQualifiedTypeNameProperty</c> carrying the group holding the leaf, without
-    /// its leading separator, as the type name TRX groups results under. A root-level leaf
-    /// carries an empty type name.
+    /// A <c>TrxFullyQualifiedTypeNameProperty</c> carrying the group holding the leaf, as a
+    /// human-facing path, as the type name TRX groups results under. A root-level leaf carries
+    /// an empty type name.
     /// </summary>
     let fullyQualifiedTypeName (leaf: ExecutableLeaf<'T>) : IProperty =
         let group = leaf.Parent |> Option.defaultValue ""
-        TrxFullyQualifiedTypeNameProperty(group.TrimStart TestTree.Separator) :> IProperty
+        TrxFullyQualifiedTypeNameProperty(group.TrimStart TestTree.Separator |> TestTree.unescape) :> IProperty
 
     /// <summary>
     /// Adds the TRX capability and registers <c>Microsoft.Testing.Extensions.TrxReport</c>'s

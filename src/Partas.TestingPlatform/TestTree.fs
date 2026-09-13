@@ -32,6 +32,9 @@ module TestTree =
     /// <summary>Replaces <c>\</c> with <c>\\</c> and <c>/</c> with <c>\/</c>.</summary>
     let private escape (name: string) = name.Replace(@"\", @"\\").Replace("/", @"\/")
 
+    /// <summary>The inverse of <c>escape</c>, for rendering a uid as a human-facing path.</summary>
+    let unescape (uid: string) = uid.Replace(@"\/", "/").Replace(@"\\", @"\")
+
     /// <summary>Assigns a UID to every node, or reports every duplicate sibling name.</summary>
     let resolve (tree: TestTree<'T>) : Result<ResolvedTestTree<'T>, Collision list> =
         let collisions = ResizeArray()
