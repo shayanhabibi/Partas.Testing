@@ -62,7 +62,7 @@ let tests =
                     task {
                         let collector = collect client
                         let! _ = client.InitializeAsync()
-                        let! result = client.RunTestsAsync()
+                        let! _ = client.RunTestsAsync()
 
                         let byUid =
                             collector.Updates
@@ -89,9 +89,18 @@ let tests =
                             byUid["/parser/literals/parses a float"].ExecutionState
                             (Some ExecutionState.Skipped)
                             "skipped"
+                    })
+        }
 
-                        Expect.isEmpty result.Attachments "a run without --report-trx produces no attachments"
-                        Expect.isEmpty collector.Attachments "no attachment notification arrives either"
+        testTask "the attachment stream stays empty without a report producer" {
+            do!
+                withClient (fun client ->
+                    task {
+                        let collector = collect client
+                        let! _ = client.InitializeAsync()
+                        let! result = client.RunTestsAsync()
+                        Expect.isEmpty result.Attachments "the run result carries no attachment"
+                        Expect.isEmpty collector.Attachments "no attachment notification arrives"
                     })
         }
 
@@ -101,8 +110,6 @@ let tests =
             try
                 let! _ = client.InitializeAsync()
                 do! client.ExitAsync()
-                // The in-process host publishes the exit code during teardown; a child-process
-                // server reports it from ExitAsync.
                 do! client.ShutdownAsync()
                 Expect.equal client.ServerExitCode (Some 0) "the hosted application exited cleanly"
             finally

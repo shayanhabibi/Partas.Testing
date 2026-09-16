@@ -28,7 +28,14 @@ module private Rethrow =
 /// A client for a Microsoft.Testing.Platform application running in server mode. The client owns
 /// the launched or hosted application for its lifetime.
 /// </summary>
-type MtpClient internal (inner: Microsoft.Testing.Platform.ServerMode.Client.IMtpServerClient, options: MtpClientOptions) =
+type MtpClient
+    internal
+    (
+        inner: Microsoft.Testing.Platform.ServerMode.Client.IMtpServerClient,
+        options: MtpClientOptions,
+        /// <summary>Whether the server runs in a process of its own.</summary>
+        ownsProcess: bool
+    ) =
     let log = options.Logger |> Option.defaultValue (fun _ _ -> ())
     let updates = Event<TestNodeUpdateBatch>()
     let logs = Event<LogMessage>()
@@ -73,11 +80,15 @@ type MtpClient internal (inner: Microsoft.Testing.Platform.ServerMode.Client.IMt
         }
         :> Task
 
-    static let launchCore (launch: unit -> Task<Microsoft.Testing.Platform.ServerMode.Client.MtpServerClient>) (options: MtpClientOptions) =
+    static let launchCore
+        (launch: unit -> Task<Microsoft.Testing.Platform.ServerMode.Client.MtpServerClient>)
+        (options: MtpClientOptions)
+        (ownsProcess: bool)
+        =
         task {
             try
                 let! inner = launch ()
-                return new MtpClient(inner, options)
+                return new MtpClient(inner, options, ownsProcess)
             with e ->
                 return Rethrow.translated e
         }
@@ -96,6 +107,7 @@ type MtpClient internal (inner: Microsoft.Testing.Platform.ServerMode.Client.IMt
         launchCore
             (fun () -> Microsoft.Testing.Platform.ServerMode.Client.MtpServerClient.LaunchAsync(source, Interop.ofOptions options, token))
             options
+            true
 
     /// <summary>
     /// Hosts the test application in the current process. <paramref name="run"/> receives the
@@ -110,6 +122,7 @@ type MtpClient internal (inner: Microsoft.Testing.Platform.ServerMode.Client.IMt
         launchCore
             (fun () -> Microsoft.Testing.Platform.ServerMode.Client.MtpServerClient.LaunchInProcessAsync(entry, Interop.ofOptions options, token))
             options
+            false
 
     member _.ProcessId: int = inner.ProcessId
     member _.ServerExitCode: int option = Option.ofNullable inner.ServerExitCode
@@ -165,9 +178,10 @@ type MtpClient internal (inner: Microsoft.Testing.Platform.ServerMode.Client.IMt
             })
 
     /// <summary>
-    /// Sends the protocol <c>exit</c> notification and waits, for up to
-    /// <c>ServerShutdownTimeout</c>, for the server to exit. A server still running at the
-    /// deadline is left to <c>ShutdownAsync</c>.
+    /// Sends the protocol <c>exit</c> notification. For a child-process server, waits for up to
+    /// <c>ServerShutdownTimeout</c> for the process to exit, leaving one still running at the
+    /// deadline to <c>ShutdownAsync</c>. An in-process host reports its exit code from
+    /// <c>ShutdownAsync</c> instead.
     /// </summary>
     member _.ExitAsync(?cancellationToken: CancellationToken) : Task =
         let token = defaultArg cancellationToken CancellationToken.None
@@ -175,10 +189,12 @@ type MtpClient internal (inner: Microsoft.Testing.Platform.ServerMode.Client.IMt
         guardUnit (fun () ->
             task {
                 do! inner.ExitAsync token
-                let deadline = DateTime.UtcNow + options.ServerShutdownTimeout
 
-                while not inner.ServerExitCode.HasValue && DateTime.UtcNow < deadline do
-                    do! Task.Delay(25, token)
+                if ownsProcess then
+                    let deadline = DateTime.UtcNow + options.ServerShutdownTimeout
+
+                    while not inner.ServerExitCode.HasValue && DateTime.UtcNow < deadline do
+                        do! Task.Delay(25, token)
             }
             :> Task)
 
