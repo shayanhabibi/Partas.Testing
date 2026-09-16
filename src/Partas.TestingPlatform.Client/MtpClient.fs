@@ -33,7 +33,6 @@ type MtpClient
     (
         inner: Microsoft.Testing.Platform.ServerMode.Client.IMtpServerClient,
         options: MtpClientOptions,
-        /// <summary>Whether the server runs in a process of its own.</summary>
         ownsProcess: bool
     ) =
     let log = options.Logger |> Option.defaultValue (fun _ _ -> ())

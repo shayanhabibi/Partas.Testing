@@ -7,6 +7,8 @@ open Expecto
 open Partas.TestingPlatform.Client
 open Partas.TestingPlatform.Client.Tests.Fixture
 
+let private slowLeafUid = "/slow/waits for cancellation"
+
 /// <summary>
 /// Runs <paramref name="body"/> against a server hosted in this process and tears the server down
 /// afterwards.
@@ -40,7 +42,7 @@ let tests =
                             collector.Updates |> List.groupBy _.NodeType |> Map.ofList
 
                         let leaves =
-                            byType[Some NodeType.Action] |> List.map _.Uid |> List.distinct |> List.sort
+                            byType[Some NodeType.Action] |> List.map _.Uid |> List.sort
 
                         Expect.equal leaves (List.sort sampleLeafUids) "a node per leaf"
 
@@ -92,6 +94,36 @@ let tests =
                     })
         }
 
+        testTask "run by uid list executes only the named leaves" {
+            do!
+                withClient (fun client ->
+                    task {
+                        let collector = collect client
+                        let! _ = client.InitializeAsync()
+                        let! _ = client.RunTestsAsync([ "/parser/reports the source span" ])
+                        let ran = collector.Updates |> List.filter terminal |> List.map _.Uid |> List.distinct
+                        Expect.equal ran [ "/parser/reports the source span" ] "only the named leaf"
+                    })
+        }
+
+        testTask "run with a graph filter executes only matching leaves" {
+            do!
+                withClient (fun client ->
+                    task {
+                        let collector = collect client
+                        let! _ = client.InitializeAsync()
+                        let! _ = client.RunTestsWithFilterAsync "/parser/literals/*"
+                        let ran = collector.Updates |> List.filter terminal |> List.map _.Uid |> List.sort
+
+                        let expected =
+                            sampleLeafUids
+                            |> List.filter (fun u -> u.StartsWith "/parser/literals/")
+                            |> List.sort
+
+                        Expect.equal ran expected "literals only"
+                    })
+        }
+
         testTask "the attachment stream stays empty without a report producer" {
             do!
                 withClient (fun client ->
@@ -122,6 +154,7 @@ let tests =
             let cts = new CancellationTokenSource()
 
             try
+                let collector = collect client
                 let inProgress = TaskCompletionSource()
 
                 client.TestNodesUpdated.Add(fun batch ->
@@ -148,7 +181,21 @@ let tests =
                     Expect.isTrue
                         (e :? OperationCanceledException)
                         $"cancellation passes through, got %s{e.GetType().Name}: %s{e.Message}"
-                | None -> ()
+                | None ->
+                    let ended =
+                        collector.Updates
+                        |> List.filter terminal
+                        |> List.tryFind (fun u -> u.Uid = slowLeafUid)
+
+                    match ended with
+                    | Some leaf ->
+                        Expect.contains
+                            [ Some ExecutionState.Canceled; Some ExecutionState.Skipped; Some ExecutionState.Failed ]
+                            leaf.ExecutionState
+                            "a completed run ends the slow leaf without a pass"
+                    | None -> failtest $"the run completed without a terminal state for %s{slowLeafUid}"
+
+                do! client.ExitAsync()
             finally
                 cts.Dispose()
                 client.ShutdownAsync().GetAwaiter().GetResult()
