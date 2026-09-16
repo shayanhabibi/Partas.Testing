@@ -11,6 +11,7 @@
 
     <ItemGroup>
         <Compile Include="InteropTests.fs"/>
+        <Compile Include="Fixture.fs"/>
         <Compile Include="Main.fs"/>
     </ItemGroup>
 
@@ -22,6 +23,10 @@
 
     <ItemGroup>
         <ProjectReference Include="../../src/Partas.TestingPlatform.Client/Partas.TestingPlatform.Client.fsproj"/>
+        <ProjectReference Include="../../src/Partas.TestingPlatform/Partas.TestingPlatform.fsproj"/>
+        <!-- Referenced for two reasons: its definition is hosted in-process, and the reference
+             copies its dll beside this project's output for the child-process launch path. -->
+        <ProjectReference Include="../../samples/Partas.TestingPlatform.Sample/Partas.TestingPlatform.Sample.fsproj"/>
     </ItemGroup>
 
 </Project>

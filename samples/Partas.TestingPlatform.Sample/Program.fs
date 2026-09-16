@@ -51,8 +51,8 @@ let runTests (context: RunContext<Body>) : Task =
             ()
     }
 
-[<EntryPoint>]
-let main argv =
+/// <summary>The sample framework, hostable in-process by a server-mode client.</summary>
+let definition =
     testFramework<Body> {
         uid "Partas.TestingPlatform.Sample"
         version "0.1.0"
@@ -62,4 +62,6 @@ let main argv =
         commandLineOptions [ myCustomFilterProvider ]
     }
     |> TrxReport.enable
-    |> TestApplication.run argv
+
+[<EntryPoint>]
+let main argv = definition |> TestApplication.run argv
