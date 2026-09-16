@@ -1,3 +1,8 @@
+---
+title: Server-mode client
+order: 2
+---
+
 # Server-mode client
 
 `Partas.TestingPlatform.Client` drives a Microsoft.Testing.Platform test application over the
@@ -69,4 +74,5 @@ Failures surface as `MtpClientException`, `MtpConnectionClosedException` or
 `MtpProtocolErrorException` (which carries the JSON-RPC error code). Cancelling the token passed to
 a discover or run call sends `$/cancelRequest`. The cancelled call then raises
 `OperationCanceledException` (or `TaskCanceledException`) unchanged; cancellation is never
-wrapped in `MtpClientException`.
+wrapped in `MtpClientException`. Server log levels outside the five `ClientLogLevel` values,
+including `Critical`, arrive as `Error`.

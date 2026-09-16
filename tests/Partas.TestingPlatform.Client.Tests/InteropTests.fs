@@ -87,6 +87,12 @@ let tests =
             Expect.equal update.Duration (Some(TimeSpan.FromMilliseconds 7.0)) "duration"
             Expect.equal update.Location (Some { File = "f"; LineStart = Some 3; LineEnd = None }) "location"
 
+        testCase "the default options take their protocol versions from upstream" <| fun () ->
+            let upstream =
+                Microsoft.Testing.Platform.ServerMode.Client.MtpServerClientOptions().SupportedProtocolVersions
+            Expect.isNonEmpty upstream "upstream default"
+            Expect.sequenceEqual MtpClientOptions.Default.SupportedProtocolVersions upstream "protocol versions"
+
         testCase "ofOptions carries every setting across" <| fun () ->
             let options =
                 { MtpClientOptions.Default with

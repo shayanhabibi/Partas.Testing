@@ -37,8 +37,9 @@ Protocol reference: <https://github.com/microsoft/testfx/blob/main/docs/mstest-r
 | `src/Partas.TestingPlatform.Client` | F# | `$(PartasTargetFrameworks)` | `Partas.TestingPlatform.Client` | `Partas.TestingPlatform.Client.Protocol` |
 
 The shim project contains a single source file declaring
-`[assembly: InternalsVisibleTo("Partas.TestingPlatform.Client")]`. It has no other code. Its
-public API is empty, which is the contract: consumers use it only through the F# package.
+`[assembly: InternalsVisibleTo(...)]` for `Partas.TestingPlatform.Client` and for the test
+assembly. It has no other code. Its public API is empty, which is the contract: consumers use it
+only through the F# package.
 
 The F# client does not reference `Microsoft.Testing.Platform`. The in-process launch path accepts
 a plain callback, so the caller supplies whichever MTP version its test application uses.
@@ -46,9 +47,6 @@ a plain callback, so the caller supplies whichever MTP version its test applicat
 The source package version is pinned exactly. It moves with the MTP floor in
 `Partas.TestingPlatform` (`[2.4.0,3.0.0)`), both driven by one `MtpVersion` property in
 `Directory.Build.props`. Floating a source-only package would silently change compiled code.
-
-The existing `src/Partas.TestingPlatform.Client` stub (an `Exe` with an empty `Program.fs`) is
-replaced by the library.
 
 ## 4. F# surface
 

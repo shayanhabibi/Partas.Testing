@@ -28,6 +28,9 @@ module private Rethrow =
 /// A client for a Microsoft.Testing.Platform application running in server mode. The client owns
 /// the launched or hosted application for its lifetime.
 /// </summary>
+/// <remarks>
+/// <c>Dispose</c> tears down synchronously; prefer <c>ShutdownAsync</c> on UI or watchdog threads.
+/// </remarks>
 type MtpClient
     internal
     (
@@ -124,6 +127,10 @@ type MtpClient
             false
 
     member _.ProcessId: int = inner.ProcessId
+    /// <summary>
+    /// The exit code of the server. For a child process, available once <c>ExitAsync</c> has
+    /// observed the process exit; for an in-process host, available after <c>ShutdownAsync</c>.
+    /// </summary>
     member _.ServerExitCode: int option = Option.ofNullable inner.ServerExitCode
     member _.Capabilities: ServerCapabilities option = inner.Capabilities |> Option.ofObj |> Option.map Interop.toCapabilities
 
@@ -179,8 +186,8 @@ type MtpClient
     /// <summary>
     /// Sends the protocol <c>exit</c> notification. For a child-process server, waits for up to
     /// <c>ServerShutdownTimeout</c> for the process to exit, leaving one still running at the
-    /// deadline to <c>ShutdownAsync</c>. An in-process host reports its exit code from
-    /// <c>ShutdownAsync</c> instead.
+    /// deadline to <c>ShutdownAsync</c>; cancelling the token ends the wait and returns. An
+    /// in-process host reports its exit code from <c>ShutdownAsync</c> instead.
     /// </summary>
     member _.ExitAsync(?cancellationToken: CancellationToken) : Task =
         let token = defaultArg cancellationToken CancellationToken.None
@@ -190,10 +197,13 @@ type MtpClient
                 do! inner.ExitAsync token
 
                 if ownsProcess then
-                    let deadline = DateTime.UtcNow + options.ServerShutdownTimeout
+                    let elapsed = System.Diagnostics.Stopwatch.StartNew()
 
-                    while not inner.ServerExitCode.HasValue && DateTime.UtcNow < deadline do
-                        do! Task.Delay(25, token)
+                    try
+                        while not inner.ServerExitCode.HasValue && elapsed.Elapsed < options.ServerShutdownTimeout do
+                            do! Task.Delay(25, token)
+                    with :? OperationCanceledException ->
+                        ()
             }
             :> Task)
 
@@ -236,7 +246,6 @@ type MtpClient
                         })
 
     interface IDisposable with
-        /// <summary>Tears down synchronously. Prefer <c>ShutdownAsync</c> on UI or watchdog threads.</summary>
         member _.Dispose() =
             if not disposed then
                 disposed <- true

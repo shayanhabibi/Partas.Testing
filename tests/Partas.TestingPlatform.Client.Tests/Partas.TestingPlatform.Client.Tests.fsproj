@@ -14,6 +14,7 @@
         <Compile Include="Fixture.fs"/>
         <Compile Include="ChildProcessTests.fs"/>
         <Compile Include="InProcessTests.fs"/>
+        <Compile Include="MtpClientTests.fs"/>
         <Compile Include="Main.fs"/>
     </ItemGroup>
 

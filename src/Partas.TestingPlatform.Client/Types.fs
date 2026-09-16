@@ -30,7 +30,9 @@ type MtpClientOptions =
             |> Option.ofObj
             |> Option.map string
             |> Option.defaultValue "1.0.0"
-          SupportedProtocolVersions = [ "1.0.0" ]
+          SupportedProtocolVersions =
+            Microsoft.Testing.Platform.ServerMode.Client.MtpServerClientOptions().SupportedProtocolVersions
+            |> List.ofSeq
           DebuggerProvider = false
           IsStateful = None
           ConnectionTimeout = TimeSpan.FromSeconds 90.0
