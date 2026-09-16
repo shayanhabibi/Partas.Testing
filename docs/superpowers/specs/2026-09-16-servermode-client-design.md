@@ -31,15 +31,25 @@ Protocol reference: <https://github.com/microsoft/testfx/blob/main/docs/mstest-r
 
 ## 3. Packages
 
-| Project | Language | TFMs | Package | Depends on |
+| Project | Language | TFMs | Packaged as | Depends on |
 |---|---|---|---|---|
-| `src/Partas.TestingPlatform.Client.Protocol` | C# | `$(PartasTargetFrameworks)` | `Partas.TestingPlatform.Client.Protocol` | `Microsoft.Testing.Platform.ServerMode.Client.Sources` (exact) |
-| `src/Partas.TestingPlatform.Client` | F# | `$(PartasTargetFrameworks)` | `Partas.TestingPlatform.Client` | `Partas.TestingPlatform.Client.Protocol` |
+| `src/Partas.TestingPlatform.Client.Protocol` | C# | `$(PartasTargetFrameworks)` | a second assembly inside `Partas.TestingPlatform.Client` | `Microsoft.Testing.Platform.ServerMode.Client.Sources` (exact) |
+| `src/Partas.TestingPlatform.Client` | F# | `$(PartasTargetFrameworks)` | `Partas.TestingPlatform.Client` | `FSharp.Core` |
+
+`Partas.TestingPlatform.Client` is the single published package. The shim project is
+`IsPackable=false`. The F# project references it with `PrivateAssets="all"`, which keeps it out of
+the package dependency list, and a `_PackProtocolAssembly` target hooked into
+`TargetsForTfmSpecificContentInPackage` adds `Partas.TestingPlatform.Client.Protocol.dll` to
+`lib/<tfm>/` beside the F# assembly. A package consumer therefore resolves both assemblies and one
+dependency, `FSharp.Core`.
+
+A project-reference consumer sees the shim as private and references the shim project directly when
+it names upstream types; `tests/Partas.TestingPlatform.Client.Tests` does.
 
 The shim project contains a single source file declaring
 `[assembly: InternalsVisibleTo(...)]` for `Partas.TestingPlatform.Client` and for the test
 assembly. It has no other code. Its public API is empty, which is the contract: consumers use it
-only through the F# package.
+only through the F# surface.
 
 The F# client does not reference `Microsoft.Testing.Platform`. The in-process launch path accepts
 a plain callback, so the caller supplies whichever MTP version its test application uses.

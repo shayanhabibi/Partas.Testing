@@ -6,6 +6,7 @@
         <PackageId>Partas.TestingPlatform.Client</PackageId>
         <Title>Partas.TestingPlatform.Client</Title>
         <Description>An F# client for Microsoft.Testing.Platform server mode.</Description>
+        <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_PackProtocolAssembly</TargetsForTfmSpecificContentInPackage>
     </PropertyGroup>
 
     <ItemGroup>
@@ -16,7 +17,28 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../Partas.TestingPlatform.Client.Protocol/Partas.TestingPlatform.Client.Protocol.csproj"/>
+        <!-- PrivateAssets leaves the shim out of the package dependency list; _PackProtocolAssembly
+             puts its assembly in the package instead. -->
+        <ProjectReference Include="../Partas.TestingPlatform.Client.Protocol/Partas.TestingPlatform.Client.Protocol.csproj" PrivateAssets="all"/>
     </ItemGroup>
+
+    <!--
+    Ships the protocol shim assembly beside this one under lib/<tfm>/, which makes it a compile and
+    runtime reference for every package consumer. ResolveReferences gives the built path of the
+    ProjectReference for the TFM of the surrounding inner build.
+    -->
+    <Target Name="_PackProtocolAssembly" DependsOnTargets="ResolveReferences">
+        <ItemGroup>
+            <_ProtocolAssembly Include="@(ReferenceCopyLocalPaths)"
+                               Condition="'%(ReferenceCopyLocalPaths.Filename)%(ReferenceCopyLocalPaths.Extension)' == 'Partas.TestingPlatform.Client.Protocol.dll'"/>
+        </ItemGroup>
+        <Error Condition="'@(_ProtocolAssembly)' == ''"
+               Text="Partas.TestingPlatform.Client.Protocol.dll is missing from the resolved references for $(TargetFramework); the package would ship without it."/>
+        <ItemGroup>
+            <TfmSpecificPackageFile Include="@(_ProtocolAssembly)">
+                <PackagePath>lib/$(TargetFramework)/</PackagePath>
+            </TfmSpecificPackageFile>
+        </ItemGroup>
+    </Target>
 
 </Project>

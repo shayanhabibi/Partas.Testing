@@ -26,6 +26,9 @@
 
     <ItemGroup>
         <ProjectReference Include="../../src/Partas.TestingPlatform.Client/Partas.TestingPlatform.Client.fsproj"/>
+        <!-- These tests construct upstream protocol types directly. Partas.TestingPlatform.Client
+             keeps its own reference to the shim private, so the reference is repeated here. -->
+        <ProjectReference Include="../../src/Partas.TestingPlatform.Client.Protocol/Partas.TestingPlatform.Client.Protocol.csproj"/>
         <ProjectReference Include="../../src/Partas.TestingPlatform/Partas.TestingPlatform.fsproj"/>
         <!-- Referenced for two reasons: its definition is hosted in-process, and the reference
              copies its dll beside this project's output for the child-process launch path. -->

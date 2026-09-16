@@ -14,7 +14,10 @@ discovery and execution updates as typed F# values.
 | Package | Contents |
 |---|---|
 | `Partas.TestingPlatform.Client` | `MtpClient` and the typed protocol records |
-| `Partas.TestingPlatform.Client.Protocol` | the upstream client source, compiled; no public API |
+
+`FSharp.Core` is the only dependency. The package ships a second assembly,
+`Partas.TestingPlatform.Client.Protocol.dll`, holding the upstream client source compiled as
+internal types; `MtpClient` is the whole public surface over it.
 
 The client carries no reference to `Microsoft.Testing.Platform`, so it drives applications built
 on any MTP version whose server protocol is `1.0.0`.

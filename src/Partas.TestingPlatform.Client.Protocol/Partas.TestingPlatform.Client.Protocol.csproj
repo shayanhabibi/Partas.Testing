@@ -4,9 +4,8 @@
         <TargetFrameworks>$(PartasTargetFrameworks)</TargetFrameworks>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
-        <PackageId>Partas.TestingPlatform.Client.Protocol</PackageId>
-        <Title>Partas.TestingPlatform.Client.Protocol</Title>
-        <Description>The Microsoft.Testing.Platform server-mode client protocol, compiled for Partas.TestingPlatform.Client. Contains no public API.</Description>
+        <!-- The Partas.TestingPlatform.Client package carries this assembly under lib/<tfm>/. -->
+        <IsPackable>false</IsPackable>
         <!-- The assembly has no public types; there is nothing to document. -->
         <GenerateDocumentationFile>false</GenerateDocumentationFile>
     </PropertyGroup>

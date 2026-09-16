@@ -19,12 +19,14 @@ VSTest's flat, attribute-shaped `TestCase` model.
 | `Partas.TestingPlatform` | `Microsoft.Testing.Platform` only | the binding |
 | `Partas.TestingPlatform.CommandLine` | binding, `FSharp.SystemCommandLine` | option adapter |
 | `Partas.TestingPlatform.Trx` | binding, `Microsoft.Testing.Extensions.TrxReport` | TRX capability and report registration |
-| `Partas.TestingPlatform.Client.Protocol` | `Microsoft.Testing.Platform.ServerMode.Client.Sources` (exact) | the upstream server-mode client, compiled; no public API |
-| `Partas.TestingPlatform.Client` | `Partas.TestingPlatform.Client.Protocol` | F# server-mode client |
+| `Partas.TestingPlatform.Client` | `FSharp.Core` only | F# server-mode client, plus the compiled upstream server-mode client as a second assembly |
 | `Partas.Testing` | binding | the framework |
 
 `TargetFrameworks` is `net8.0;net10.0`, set in `Directory.Build.props`. `PackageId` is
 per-project. The MTP reference floats within `[2.4.0,3.0.0)`.
+
+`src/Partas.TestingPlatform.Client.Protocol` is a build-only project: `IsPackable=false`, and its
+assembly ships under `lib/<tfm>/` of the `Partas.TestingPlatform.Client` package.
 
 ## 3. The seam
 
