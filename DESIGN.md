@@ -19,6 +19,8 @@ VSTest's flat, attribute-shaped `TestCase` model.
 | `Partas.TestingPlatform` | `Microsoft.Testing.Platform` only | the binding |
 | `Partas.TestingPlatform.CommandLine` | binding, `FSharp.SystemCommandLine` | option adapter |
 | `Partas.TestingPlatform.Trx` | binding, `Microsoft.Testing.Extensions.TrxReport` | TRX capability and report registration |
+| `Partas.TestingPlatform.Client.Protocol` | `Microsoft.Testing.Platform.ServerMode.Client.Sources` (exact) | the upstream server-mode client, compiled; no public API |
+| `Partas.TestingPlatform.Client` | `Partas.TestingPlatform.Client.Protocol` | F# server-mode client |
 | `Partas.Testing` | binding | the framework |
 
 `TargetFrameworks` is `net8.0;net10.0`, set in `Directory.Build.props`. `PackageId` is
@@ -337,7 +339,7 @@ code that genuinely sits on shifting ground. Version 1.0 covers the structural c
 ## 12. Testing
 
 `tests/Partas.TestingPlatform.ProtocolTests` drives the framework over the real server
-protocol using `Microsoft.Testing.Platform.ServerMode.Client.Sources`.
+protocol using `Partas.TestingPlatform.Client` (design: `docs/superpowers/specs/2026-09-16-servermode-client-design.md`).
 
 Property-based, over generated trees:
 
@@ -412,3 +414,4 @@ deepen together, which is what makes the consumer-driven rule in §1 enforceable
 | 39 | Expecto and FsCheck, hosted by the VSTest adapter so one `dotnet test` runs every suite |
 | 40 | housekeeping commit first |
 | 41 | a leaf-property contribution seam, so a companion package supplies the properties its writer requires |
+| 42 | server-mode client shipped as an F# package over a C# shim; one `Interop` module is the glue |

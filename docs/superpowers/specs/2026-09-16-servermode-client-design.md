@@ -129,6 +129,9 @@ type MtpClientOptions =
 `Partas.TestingPlatform.Client`, version from the assembly, upstream supported protocol versions,
 90 second connection timeout, 30 second shutdown timeout, and a silent logger.
 
+`IsStateful = None` and `IsStateful = Some false` are indistinguishable on the wire; upstream
+2.4.0 exposes a plain `bool`.
+
 `ClientLogLevel` is `Trace | Debug | Information | Warning | Error`.
 
 ### 4.3 Payloads
@@ -192,6 +195,9 @@ is `None` for a node published without an `execution-state` property. `Raw` hold
 property dictionary so extension properties from the IDE-integration protocol document stay
 reachable without a library change.
 
+A request's updates complete when the call returns; the upstream client does not surface the
+protocol's terminal notification.
+
 ### 4.4 Exceptions
 
 ```fsharp
@@ -229,8 +235,10 @@ Ownership follows the upstream contract:
 
 - The client owns the launched or hosted server. Closing the transport is how a server-mode
   application is asked to stop.
-- `ExitAsync` sends the protocol `exit` notification. Callers send it before shutdown for a
-  graceful stop.
+- `ExitAsync` sends the protocol `exit` notification. For a child-process server, it then waits
+  up to `ServerShutdownTimeout` for the process to exit, so `ServerExitCode` is available as soon
+  as `ExitAsync` returns. For an in-process host, `ServerExitCode` becomes available only after
+  `ShutdownAsync`.
 - `ShutdownAsync` tears down without blocking. `Dispose` performs the same work synchronously.
   Both are idempotent, and a `Dispose` after `ShutdownAsync` returns immediately.
 - Teardown waits at most `ServerShutdownTimeout`, then cancels the in-process callback's token and
@@ -258,7 +266,7 @@ Both paths run the same test list:
 
 1. `InitializeAsync` returns capabilities with `SupportsDiscovery = true` and a protocol version.
 2. Discover-all publishes every sample leaf exactly once, `Discovered`, with each `ParentUid`
-   published earlier in the same session and a final batch with empty `Updates`.
+   published earlier in the same session.
 3. Run-all publishes a terminal `ExecutionState` for every leaf and returns a `RunResult`.
 4. Run by UID list executes only the named leaves.
 5. Run with a graph filter executes only matching leaves.
@@ -266,9 +274,10 @@ Both paths run the same test list:
    run's cancellation token, completes the call and leaves the client usable for `ExitAsync`.
 7. `ExitAsync` then `ShutdownAsync` yields `ServerExitCode = Some _`, and a second `Dispose` is a
    no-op.
-8. `AttachmentsReceived` observes the TRX attachment when the in-process callback appends
-   `--report-trx` to the server arguments. `LogReceived` is covered by the mapping test below,
-   since the launch paths carry no verbosity flag.
+8. Attachments: not reachable against upstream 2.4.0 (a report producer requires a test-host
+   controller relaunch, which neither launch path supports). A negative test asserts the
+   attachment stream and `RunResult.Attachments` stay empty; the mapping itself is covered by
+   the `Interop` tests.
 9. An update lacking `uid` is dropped and logged, tested by feeding a property dictionary
    directly to the `Interop` mapping.
 
@@ -285,3 +294,5 @@ The property-based rig from `DESIGN.md` §12 is a separate spec and consumes thi
 | C5 | client carries no `Microsoft.Testing.Platform` reference; in-process callback is a plain function |
 | C6 | upstream exceptions translated to F# exceptions at the boundary |
 | C7 | one internal `Interop` module is the entire glue layer |
+| C8 | `ExitAsync` waits for a child process to exit; in-process exit codes surface only after `ShutdownAsync` |
+| C9 | attachments are untestable against upstream 2.4.0; covered by a negative test plus `Interop` mapping coverage |
