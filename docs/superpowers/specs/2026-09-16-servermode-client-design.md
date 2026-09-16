@@ -149,7 +149,7 @@ type NodeError = { Message: string option; StackTrace: string option }
 type TestNodeUpdate =
     { Uid: string
       DisplayName: string option
-      NodeType: NodeType
+      NodeType: NodeType option
       ExecutionState: ExecutionState option
       ParentUid: string option
       Location: SourceLocation option
@@ -195,13 +195,21 @@ reachable without a library change.
 ### 4.4 Exceptions
 
 ```fsharp
-exception MtpClientException of message: string * inner: exn option
-exception MtpConnectionClosedException of message: string * inner: exn option
-exception MtpServerErrorException of code: int * message: string
+type MtpClientException(message: string, inner: exn) =
+    inherit Exception(message, inner)
+
+type MtpConnectionClosedException(message: string, inner: exn) =
+    inherit MtpClientException(message, inner)
+
+type MtpProtocolErrorException(code: int, message: string, inner: exn) =
+    inherit MtpClientException(message, inner)
+    member ErrorCode : int
 ```
 
 Every public member catches the three upstream exception types at the boundary and raises the
 corresponding F# exception with the original as `inner`. Other exceptions pass through unchanged.
+The names differ from the upstream `MtpServerClientException`, `MtpServerConnectionClosedException`
+and `MtpServerErrorException` so both sets can be referenced in the same file.
 
 ### 4.5 Interop module
 
@@ -254,14 +262,14 @@ Both paths run the same test list:
 3. Run-all publishes a terminal `ExecutionState` for every leaf and returns a `RunResult`.
 4. Run by UID list executes only the named leaves.
 5. Run with a graph filter executes only matching leaves.
-6. Cancelling a run mid-flight completes the call with cancellation and leaves the client usable
-   for `ExitAsync`.
+6. Cancelling a run mid-flight, against a test-project suite with one leaf that waits on the
+   run's cancellation token, completes the call and leaves the client usable for `ExitAsync`.
 7. `ExitAsync` then `ShutdownAsync` yields `ServerExitCode = Some _`, and a second `Dispose` is a
    no-op.
-8. `LogReceived` observes at least one message when the server is started with a verbose log
-   level; `AttachmentsReceived` observes the TRX attachment when the sample is run with the TRX
-   option.
-9. An update lacking `uid` is dropped and logged, tested through a fake `IMtpServerClient` fed
+8. `AttachmentsReceived` observes the TRX attachment when the in-process callback appends
+   `--report-trx` to the server arguments. `LogReceived` is covered by the mapping test below,
+   since the launch paths carry no verbosity flag.
+9. An update lacking `uid` is dropped and logged, tested by feeding a property dictionary
    directly to the `Interop` mapping.
 
 The property-based rig from `DESIGN.md` §12 is a separate spec and consumes this library.
