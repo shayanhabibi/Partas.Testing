@@ -116,6 +116,116 @@ let tests =
             upstream.Logger.Log(Microsoft.Testing.Platform.ServerMode.Client.MtpClientLogLevel.Error, "x")
             Expect.equal (List.ofSeq logged) [ ClientLogLevel.Error, "x" ] "forwarded"
 
+        testCase "toUpdateBatch maps RunId, drops nodes without uid, and logs a warning" <| fun () ->
+            let logged = ResizeArray<ClientLogLevel * string>()
+            let log level message = logged.Add((level, message))
+            let runId = Guid.NewGuid()
+            let withUid =
+                Dictionary<string, obj>(dict [ "uid", box "/a" ]) :> IDictionary<string, obj>
+            let withoutUid =
+                Dictionary<string, obj>(dict [ "display-name", box "orphan" ]) :> IDictionary<string, obj>
+            let updates =
+                [| Microsoft.Testing.Platform.ServerMode.Client.MtpTestNodeUpdate(withUid, "/parent")
+                   Microsoft.Testing.Platform.ServerMode.Client.MtpTestNodeUpdate(withoutUid, null) |]
+                :> IReadOnlyList<Microsoft.Testing.Platform.ServerMode.Client.MtpTestNodeUpdate>
+            let args = Microsoft.Testing.Platform.ServerMode.Client.MtpTestNodeUpdateEventArgs(runId, updates)
+            let batch = Interop.toUpdateBatch log args
+            Expect.equal batch.RunId runId "run id"
+            Expect.equal batch.Updates.Length 1 "one update kept"
+            Expect.equal batch.Updates.[0].ParentUid (Some "/parent") "parent uid preserved"
+            Expect.equal logged.Count 1 "one warning logged"
+            Expect.equal (fst logged[0]) ClientLogLevel.Warning "level"
+
+        testCase "toCapabilities maps every field when populated" <| fun () ->
+            let upstream =
+                Microsoft.Testing.Platform.ServerMode.Client.MtpServerCapabilities(
+                    Nullable 42,
+                    "srv",
+                    "1.2.3",
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    "2.0")
+            let capabilities = Interop.toCapabilities upstream
+            Expect.equal capabilities.ServerProcessId (Some 42) "server process id"
+            Expect.equal capabilities.ServerName (Some "srv") "server name"
+            Expect.equal capabilities.ServerVersion (Some "1.2.3") "server version"
+            Expect.equal capabilities.ProtocolVersion (Some "2.0") "protocol version"
+            Expect.isTrue capabilities.SupportsDiscovery "supports discovery"
+            Expect.isTrue capabilities.MultiRequestSupport "multi request support"
+            Expect.isTrue capabilities.VSTestProviderSupport "vstest provider support"
+            Expect.isTrue capabilities.SupportsAttachments "supports attachments"
+            Expect.isTrue capabilities.MultiConnectionProvider "multi connection provider"
+
+        testCase "toCapabilities maps absent optional fields to None" <| fun () ->
+            let upstream =
+                Microsoft.Testing.Platform.ServerMode.Client.MtpServerCapabilities(
+                    Nullable(),
+                    null,
+                    null,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false)
+            let capabilities = Interop.toCapabilities upstream
+            Expect.equal capabilities.ServerProcessId None "server process id"
+            Expect.equal capabilities.ServerName None "server name"
+            Expect.equal capabilities.ServerVersion None "server version"
+            Expect.equal capabilities.ProtocolVersion None "protocol version"
+
+        testCase "toRunResult and toAttachment map a fully populated attachment" <| fun () ->
+            let attachment =
+                Microsoft.Testing.Platform.ServerMode.Client.MtpAttachment("file:///x.trx", "trx", "type", "name", "desc")
+            let upstream =
+                Microsoft.Testing.Platform.ServerMode.Client.MtpRunResult([| attachment |])
+            let result = Interop.toRunResult upstream
+            Expect.equal result.Attachments.Length 1 "one attachment"
+            let mapped = result.Attachments.[0]
+            Expect.equal mapped.Uri (Some "file:///x.trx") "uri"
+            Expect.equal mapped.Producer (Some "trx") "producer"
+            Expect.equal mapped.Type (Some "type") "type"
+            Expect.equal mapped.DisplayName (Some "name") "display name"
+            Expect.equal mapped.Description (Some "desc") "description"
+
+        testCase "toAttachment maps a fully absent attachment to None fields" <| fun () ->
+            let attachment =
+                Microsoft.Testing.Platform.ServerMode.Client.MtpAttachment(null, null, null, null, null)
+            let mapped = Interop.toAttachment attachment
+            Expect.equal mapped.Uri None "uri"
+            Expect.equal mapped.Producer None "producer"
+            Expect.equal mapped.Type None "type"
+            Expect.equal mapped.DisplayName None "display name"
+            Expect.equal mapped.Description None "description"
+
+        testCase "toLogLevel maps every upstream level" <| fun () ->
+            let cases =
+                [ Microsoft.Testing.Platform.ServerMode.Client.MtpClientLogLevel.Trace, ClientLogLevel.Trace
+                  Microsoft.Testing.Platform.ServerMode.Client.MtpClientLogLevel.Debug, ClientLogLevel.Debug
+                  Microsoft.Testing.Platform.ServerMode.Client.MtpClientLogLevel.Information, ClientLogLevel.Information
+                  Microsoft.Testing.Platform.ServerMode.Client.MtpClientLogLevel.Warning, ClientLogLevel.Warning
+                  Microsoft.Testing.Platform.ServerMode.Client.MtpClientLogLevel.Error, ClientLogLevel.Error ]
+            for wire, expected in cases do
+                Expect.equal (Interop.toLogLevel wire) expected (string wire)
+
+        testCase "toLogMessage maps a known level and defaults an unknown one to Error" <| fun () ->
+            let known = Microsoft.Testing.Platform.ServerMode.Client.MtpLogEventArgs("Warning", "m")
+            let message = Interop.toLogMessage known
+            Expect.equal message { Level = ClientLogLevel.Warning; Message = "m" } "known level"
+            let unknown = Microsoft.Testing.Platform.ServerMode.Client.MtpLogEventArgs("Bogus", "m2")
+            let mapped = Interop.toLogMessage unknown
+            Expect.equal mapped { Level = ClientLogLevel.Error; Message = "m2" } "unknown level defaults to error"
+
+        testCase "toTelemetry maps EventName and passes Metrics through" <| fun () ->
+            let metrics =
+                Dictionary<string, obj>(dict [ "k", box 1 ]) :> IReadOnlyDictionary<string, obj>
+            let upstream = Microsoft.Testing.Platform.ServerMode.Client.MtpTelemetryEventArgs("evt", metrics)
+            let telemetry = Interop.toTelemetry upstream
+            Expect.equal telemetry.EventName "evt" "event name"
+            Expect.isTrue (obj.ReferenceEquals(telemetry.Metrics, metrics)) "metrics reference passed through"
+
         testCase "translateException wraps the three upstream exceptions" <| fun () ->
             let closed = Microsoft.Testing.Platform.ServerMode.Client.MtpServerConnectionClosedException("closed")
             let error = Microsoft.Testing.Platform.ServerMode.Client.MtpServerErrorException(-32600, "bad")
