@@ -13,6 +13,17 @@ open System.Threading.Tasks
 type ServerRequestHandler =
     string -> IReadOnlyDictionary<string, obj> option -> CancellationToken -> Task<IReadOnlyDictionary<string, obj> option>
 
+module private Rethrow =
+    /// <summary>
+    /// Raises the client-facing translation of <paramref name="e"/>. An exception that passes
+    /// through untranslated keeps its original stack trace.
+    /// </summary>
+    let translated (e: exn) : 'a =
+        let translation = Interop.translateException e
+        if obj.ReferenceEquals(translation, e) then
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(e).Throw()
+        raise translation
+
 /// <summary>
 /// A client for a Microsoft.Testing.Platform application running in server mode. The client owns
 /// the launched or hosted application for its lifetime.
@@ -50,7 +61,7 @@ type MtpClient internal (inner: Microsoft.Testing.Platform.ServerMode.Client.IMt
             try
                 return! work ()
             with e ->
-                return raise (Interop.translateException e)
+                return Rethrow.translated e
         }
 
     let guardUnit (work: unit -> Task) : Task =
@@ -58,7 +69,7 @@ type MtpClient internal (inner: Microsoft.Testing.Platform.ServerMode.Client.IMt
             try
                 do! work ()
             with e ->
-                return raise (Interop.translateException e)
+                return Rethrow.translated e
         }
         :> Task
 
@@ -68,7 +79,7 @@ type MtpClient internal (inner: Microsoft.Testing.Platform.ServerMode.Client.IMt
                 let! inner = launch ()
                 return new MtpClient(inner, options)
             with e ->
-                return raise (Interop.translateException e)
+                return Rethrow.translated e
         }
 
     /// <summary>Launches <paramref name="source"/> as a child process and blocks until it connects.</summary>
