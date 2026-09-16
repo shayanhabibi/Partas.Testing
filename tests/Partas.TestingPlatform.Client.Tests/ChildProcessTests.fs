@@ -21,22 +21,6 @@ let private withClient (body: MtpClient -> Task<unit>) : Task<unit> =
             (client :> IDisposable).Dispose()
     }
 
-/// <summary>
-/// The application's own exit code once its process ends, polled for up to five seconds.
-/// Teardown latches the code available at the moment it runs.
-/// </summary>
-let private awaitExitCode (client: MtpClient) : Task<int option> =
-    task {
-        let deadline = DateTime.UtcNow.AddSeconds 5.0
-        let mutable code = client.ServerExitCode
-
-        while code.IsNone && DateTime.UtcNow < deadline do
-            do! Task.Delay 25
-            code <- client.ServerExitCode
-
-        return code
-    }
-
 [<Tests>]
 let tests =
     testSequenced
@@ -154,13 +138,18 @@ let tests =
 
         testTask "exit then shutdown yields an exit code and dispose is idempotent" {
             let! (client: MtpClient) = launchChild ()
-            let! _ = client.InitializeAsync()
-            do! client.ExitAsync()
-            let! exitCode = awaitExitCode client
-            Expect.isSome exitCode "the exit notification ended the application"
-            do! client.ShutdownAsync()
-            Expect.equal client.ServerExitCode exitCode "shutdown latches the observed exit code"
-            (client :> IDisposable).Dispose()
-            (client :> IDisposable).Dispose()
+
+            try
+                let! _ = client.InitializeAsync()
+                do! client.ExitAsync()
+                let exitCode = client.ServerExitCode
+                Expect.isSome exitCode "the exit notification ended the application"
+                do! client.ShutdownAsync()
+                Expect.equal client.ServerExitCode exitCode "shutdown preserves the observed exit code"
+                (client :> IDisposable).Dispose()
+                (client :> IDisposable).Dispose()
+            finally
+                client.ShutdownAsync().GetAwaiter().GetResult()
+                (client :> IDisposable).Dispose()
         }
     ]

@@ -164,10 +164,23 @@ type MtpClient internal (inner: Microsoft.Testing.Platform.ServerMode.Client.IMt
                 return Interop.toRunResult r
             })
 
-    /// <summary>Sends the protocol <c>exit</c> notification.</summary>
+    /// <summary>
+    /// Sends the protocol <c>exit</c> notification and waits, for up to
+    /// <c>ServerShutdownTimeout</c>, for the server to exit. A server still running at the
+    /// deadline is left to <c>ShutdownAsync</c>.
+    /// </summary>
     member _.ExitAsync(?cancellationToken: CancellationToken) : Task =
         let token = defaultArg cancellationToken CancellationToken.None
-        guardUnit (fun () -> inner.ExitAsync token)
+
+        guardUnit (fun () ->
+            task {
+                do! inner.ExitAsync token
+                let deadline = DateTime.UtcNow + options.ServerShutdownTimeout
+
+                while not inner.ServerExitCode.HasValue && DateTime.UtcNow < deadline do
+                    do! Task.Delay(25, token)
+            }
+            :> Task)
 
     /// <summary>Tears down the connection and the server without blocking. Idempotent.</summary>
     member _.ShutdownAsync() : Task = guardUnit (fun () -> inner.ShutdownAsync())
