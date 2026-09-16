@@ -6,7 +6,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <!-- The Partas.TestingPlatform.Client package carries this assembly under lib/<tfm>/. -->
         <IsPackable>false</IsPackable>
-        <!-- The assembly has no public types; there is nothing to document. -->
+        <!-- The assembly ships internal types only. -->
         <GenerateDocumentationFile>false</GenerateDocumentationFile>
     </PropertyGroup>
 
