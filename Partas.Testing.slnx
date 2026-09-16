@@ -17,6 +17,8 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Partas.TestingPlatform/Partas.TestingPlatform.fsproj" />
+    <Project Path="src/Partas.TestingPlatform.Client/Partas.TestingPlatform.Client.fsproj" />
+    <Project Path="src/Partas.TestingPlatform.Client.Protocol/Partas.TestingPlatform.Client.Protocol.csproj" />
     <Project Path="src/Partas.TestingPlatform.CommandLine/Partas.TestingPlatform.CommandLine.fsproj" />
     <Project Path="src/Partas.TestingPlatform.Trx/Partas.TestingPlatform.Trx.fsproj" />
     <Project Path="src/Partas.Testing/Partas.Testing.fsproj" />
