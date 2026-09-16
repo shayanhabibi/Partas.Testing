@@ -72,26 +72,13 @@ let launchSlowInProcess () : Task<MtpClient> = hostInProcess slowDefinition []
 type Collector(client: MtpClient) =
     let updates = ResizeArray<TestNodeUpdate>()
     let attachments = ResizeArray<Attachment list>()
-    let completed = TaskCompletionSource()
 
     do
-        client.TestNodesUpdated.Add(fun batch ->
-            lock updates (fun () -> updates.AddRange batch.Updates)
-
-            if List.isEmpty batch.Updates then
-                completed.TrySetResult() |> ignore)
-
+        client.TestNodesUpdated.Add(fun batch -> lock updates (fun () -> updates.AddRange batch.Updates))
         client.AttachmentsReceived.Add(fun a -> lock attachments (fun () -> attachments.Add a))
 
     member _.Updates: TestNodeUpdate list = lock updates (fun () -> List.ofSeq updates)
     member _.Attachments: Attachment list list = lock attachments (fun () -> List.ofSeq attachments)
-
-    /// <summary>
-    /// Resolves on the first batch carrying no updates. The upstream client discards the
-    /// protocol's completion sentinel, leaving this pending against a server whose batches all
-    /// carry updates; await the discovery or run request for the ordering guarantee.
-    /// </summary>
-    member _.Completed: Task = completed.Task
 
 let collect (client: MtpClient) = Collector client
 
