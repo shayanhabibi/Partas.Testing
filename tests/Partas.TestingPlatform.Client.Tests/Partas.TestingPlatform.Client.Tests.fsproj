@@ -13,6 +13,7 @@
         <Compile Include="InteropTests.fs"/>
         <Compile Include="Fixture.fs"/>
         <Compile Include="ChildProcessTests.fs"/>
+        <Compile Include="InProcessTests.fs"/>
         <Compile Include="Main.fs"/>
     </ItemGroup>
 
