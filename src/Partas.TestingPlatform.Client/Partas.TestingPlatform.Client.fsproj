@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>$(PartasTargetFrameworks)</TargetFrameworks>
+        <LangVersion>latest</LangVersion>
+        <PackageId>Partas.TestingPlatform.Client</PackageId>
+        <Title>Partas.TestingPlatform.Client</Title>
+        <Description>An F# client for Microsoft.Testing.Platform server mode.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="AssemblyInfo.fs"/>
+        <Compile Include="Types.fs"/>
+        <Compile Include="Interop.fs"/>
+        <Compile Include="MtpClient.fs"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../Partas.TestingPlatform.Client.Protocol/Partas.TestingPlatform.Client.Protocol.csproj"/>
+    </ItemGroup>
+
+</Project>

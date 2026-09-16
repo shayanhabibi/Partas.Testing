@@ -1,0 +1,1 @@
+namespace Partas.TestingPlatform.Client
