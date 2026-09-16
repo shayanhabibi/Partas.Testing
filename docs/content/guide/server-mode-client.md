@@ -43,13 +43,13 @@ exit, so `ServerExitCode` is available as soon as `ExitAsync` returns. For an in
 ## Hosting in-process
 
 `LaunchInProcessAsync` runs the application in the current process. The callback receives the
-complete server-mode argument array and must forward it unchanged, appending any extra options
-after it:
+complete server-mode argument array and must forward it unchanged; extra options may be appended
+after the server arguments:
 
 ```fsharp
 let! client =
     MtpClient.LaunchInProcessAsync(fun args _ ->
-        Task.Run(fun () -> definition |> TestApplication.run (Array.append args [| "--report-trx" |])))
+        Task.Run(fun () -> definition |> TestApplication.run args))
 ```
 
 Options that register a test-host controller, such as `--report-trx`, cannot be appended here:
@@ -67,4 +67,6 @@ dictionary in `Raw`.
 
 Failures surface as `MtpClientException`, `MtpConnectionClosedException` or
 `MtpProtocolErrorException` (which carries the JSON-RPC error code). Cancelling the token passed to
-a discover or run call sends `$/cancelRequest`.
+a discover or run call sends `$/cancelRequest`. The cancelled call then raises
+`OperationCanceledException` (or `TaskCanceledException`) unchanged; cancellation is never
+wrapped in `MtpClientException`.
