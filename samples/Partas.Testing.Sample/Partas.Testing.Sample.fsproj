@@ -6,6 +6,7 @@
         <LangVersion>latest</LangVersion>
         <IsPackable>false</IsPackable>
         <GenerateTestingPlatformEntryPoint>false</GenerateTestingPlatformEntryPoint>
+        <RootNamespace>Partas.Testing.Sample</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>

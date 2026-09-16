@@ -11,7 +11,6 @@ open System.Runtime.CompilerServices
 // FrameworkDefinition module instead. InternalsVisibleTo without a matching strong name is a
 // compile-time speed bump against accident, not a boundary against intent: any assembly
 // compiled with a matching AssemblyName can forge the grant. Strong-naming this assembly would
-// close that gap but changes the shipped package's identity for every consumer, so it is left
-// as the project owner's decision rather than applied here.
+// close that gap but changes the shipped package's identity for every consumer.
 [<assembly: InternalsVisibleTo("Partas.TestingPlatform.Trx")>]
 do ()

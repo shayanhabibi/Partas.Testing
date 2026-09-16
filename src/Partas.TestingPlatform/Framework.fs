@@ -19,16 +19,18 @@ open Microsoft.Testing.Platform.Requests
 open Microsoft.Testing.Platform.Services
 
 /// <summary>
-/// A latch the platform sets to ask a run to stop early; <c>--maximum-failed-tests</c> sets it
-/// once the failure count reaches its argument. A framework reads it between tests, so a test
-/// already running continues to its own end. Setting it twice leaves it set.
+/// Platform switch to ask a run to stop early; <c>--maximum-failed-tests</c> sets it
+/// once the failure count reaches its argument.
 /// </summary>
+/// <remarks>
+/// Frameworks read it between tests, so a test already running continues to its own end.
+/// </remarks>
 type GracefulStop() =
     let mutable requested = 0
 
-    member _.IsRequested = Interlocked.CompareExchange(&requested, 0, 0) = 1
+    member _.IsRequested = Interlocked.And(&requested, Int32.MaxValue) <> 0
 
-    member _.Request() = Interlocked.Exchange(&requested, 1) |> ignore
+    member _.Request() = Interlocked.Increment(&requested) |> ignore
 
 /// <summary>The surviving tree, a reporter for its leaves, and the session's cancellation.</summary>
 type RunContext<'T> =
@@ -43,7 +45,7 @@ type RunContext<'T> =
       GracefulStop: GracefulStop }
 
 /// <summary>
-/// An action run on the builder before it builds, for a companion package to register onto
+/// An action run on the builder before it builds, for another package to register onto
 /// <c>ITestApplicationBuilder</c> itself (e.g. TRX's report writer). An MTP builder
 /// registration can defer a closure's execution into the running session, reaching
 /// <c>IServiceProvider</c> and <c>IMessageBus</c> from there. Construction is limited to the
@@ -58,7 +60,7 @@ module internal BuilderExtension =
     let invoke (builder: ITestApplicationBuilder) (BuilderExtension action) = action builder
 
 /// <summary>
-/// A test framework's declared identity, tree, execution, and extension points. The
+/// A test framework's identity, tree, execution, and extension points. The
 /// representation is internal: a caller outside the assemblies this binding grants
 /// <c>InternalsVisibleTo</c> builds and reads one exclusively through <c>testFramework</c>,
 /// <c>TestApplication.run</c>, and the read accessors in the <c>FrameworkDefinition</c> module.
@@ -72,6 +74,8 @@ type FrameworkDefinition<'T> =
           Banner: string option
           BuildTree: unit -> TestTree<'T>
           RunTests: RunContext<'T> -> Task
+          CreateSession: SessionContext -> Task<SessionOutcome>
+          CloseSession: SessionContext -> Task<SessionOutcome>
           /// <summary>
           /// Factories for MTP command-line option providers, declared to the platform alongside
           /// the framework so custom options survive MTP's unrecognised-option rejection.
@@ -96,18 +100,18 @@ type private BannerCapability(message: string) =
         member _.GetBannerMessageAsync() = Task.FromResult message
 
 /// <summary>
-/// Sets the given latch when the platform asks a run to stop, and reports the request honoured.
+/// Sets the given switch when the platform asks a run to stop, and reports the request honoured.
 /// Reporting <c>true</c> holds the platform to its graceful path, so tests already running reach
 /// their own end and publish their own results.
 /// </summary>
 type private GracefulStopCapability(stop: GracefulStop) =
     interface IGracefulStopTestExecutionCapability with
-        member _.StopTestExecutionAsync(_) =
+        member _.StopTestExecutionAsync _ =
             stop.Request()
             Task.CompletedTask
 
     interface IGracefulStopTestExecutionResultCapability with
-        member _.TryStopTestExecutionAsync(_) =
+        member _.TryStopTestExecutionAsync _ =
             stop.Request()
             Task.FromResult true
 
@@ -155,17 +159,29 @@ type Framework<'T>(definition: FrameworkDefinition<'T>) =
         member _.DataTypesProduced = [| typeof<TestNodeUpdateMessage> |]
 
     interface ITestFramework with
-        member this.CreateTestSessionAsync _ =
-            resolved <- Session.resolveTree definition.BuildTree
+        member _.CreateTestSessionAsync context =
+            task {
+                resolved <- Error "The test session has not been created."
+                let! outcome = definition.CreateSession (SessionContext.ofCreate context)
+                let result =
+                    match outcome with
+                    | SessionOutcome.Failed _ -> outcome
+                    | SessionOutcome.Succeeded warning ->
+                        resolved <- Session.resolveTree definition.BuildTree
+                        match resolved with
+                        | Ok _ -> outcome
+                        | Error message -> SessionOutcome.Failed(message, warning)
+                return SessionOutcome.toCreateResult result
+            }
 
-            match resolved with
-            | Ok _ -> SessionOutcome.Succeeded None
-            | Error message -> SessionOutcome.Failed(message, None)
-            |> SessionOutcome.toCreateResult
-            |> Task.FromResult
-
-        member _.CloseTestSessionAsync _ =
-            SessionOutcome.Succeeded None |> SessionOutcome.toCloseResult |> Task.FromResult
+        member _.CloseTestSessionAsync context =
+            task {
+                try
+                    let! outcome = definition.CloseSession (SessionContext.ofClose context)
+                    return SessionOutcome.toCloseResult outcome
+                finally
+                    resolved <- Error "The test session has been closed."
+            }
 
         member this.ExecuteRequestAsync(context) =
             task {
@@ -217,6 +233,8 @@ module FrameworkDefinition =
           Banner = None
           BuildTree = fun () -> Group("", None, [], [])
           RunTests = fun _ -> Task.CompletedTask
+          CreateSession = fun _ -> Task.FromResult(SessionOutcome.Succeeded None)
+          CloseSession = fun _ -> Task.FromResult(SessionOutcome.Succeeded None)
           CommandLineOptionsProviders = []
           Capabilities = []
           LeafProperties = fun _ -> []
@@ -225,6 +243,14 @@ module FrameworkDefinition =
     /// <summary>The command-line option provider factories declared on this definition.</summary>
     let commandLineOptionsProviders (definition: FrameworkDefinition<'T>) =
         definition.CommandLineOptionsProviders
+
+    /// <summary>Replaces session setup. MTP awaits it before the tree is built; failure skips tree construction.</summary>
+    let withCreateSession (callback: SessionContext -> Task<SessionOutcome>) (definition: FrameworkDefinition<'T>) =
+        { definition with CreateSession = callback }
+
+    /// <summary>Replaces cleanup invoked when MTP closes the session. Callback faults and cancellation propagate to MTP.</summary>
+    let withCloseSession (callback: SessionContext -> Task<SessionOutcome>) (definition: FrameworkDefinition<'T>) =
+        { definition with CloseSession = callback }
 
     /// <summary>The capability factories declared on this definition.</summary>
     let capabilities (definition: FrameworkDefinition<'T>) = definition.Capabilities
@@ -290,6 +316,14 @@ type TestFrameworkBuilder<'T>() =
     [<CustomOperation "onRun">]
     member _.OnRun(definition: FrameworkDefinition<'T>, run) = { definition with RunTests = run }
 
+    [<CustomOperation "onCreateSession">]
+    member _.OnCreateSession(definition: FrameworkDefinition<'T>, callback) =
+        FrameworkDefinition.withCreateSession callback definition
+
+    [<CustomOperation "onCloseSession">]
+    member _.OnCloseSession(definition: FrameworkDefinition<'T>, callback) =
+        FrameworkDefinition.withCloseSession callback definition
+
     /// <summary>Declares command-line option providers, replacing any previously declared.</summary>
     [<CustomOperation "commandLineOptions">]
     member _.CommandLineOptions(definition: FrameworkDefinition<'T>, providers) =
@@ -319,39 +353,36 @@ module internal BuilderExtensions =
             BuilderExtension.invoke builder extension
 
 module TestApplication =
+    let configure (builder: ITestApplicationBuilder) (definition: FrameworkDefinition<'T>) =
+        if String.IsNullOrWhiteSpace definition.Uid then
+            invalidArg (nameof definition) "A framework definition requires a uid."
+        let definition =
+            { definition with
+                DisplayName = (if definition.DisplayName = "" then definition.Uid else definition.DisplayName)
+                Description = (if definition.Description = "" then definition.Uid else definition.Description) }
+        let framework = Framework definition
+        builder.RegisterTestFramework(
+            (fun _ -> FrameworkCapabilities(definition, framework.GracefulStop) :> ITestFrameworkCapabilities),
+            (fun _ serviceProvider ->
+                framework.SetServices serviceProvider
+                framework :> ITestFramework)
+            )
+        |> ignore
+        builder.AddTreeNodeFilterService framework
+        builder.AddMaximumFailedTestsService framework
+        for factory in definition.CommandLineOptionsProviders do
+            builder.CommandLine.AddProvider(fun () -> factory())
+        definition |> BuilderExtensions.run builder
+
+
 
     /// <summary>
     /// Runs the definition as a test application, returning the process exit code.
     /// </summary>
     let run (argv: string[]) (definition: FrameworkDefinition<'T>) =
-        if String.IsNullOrWhiteSpace definition.Uid then
-            invalidArg (nameof definition) "A framework definition requires a uid."
-
-        let definition =
-            { definition with
-                DisplayName = (if definition.DisplayName = "" then definition.Uid else definition.DisplayName)
-                Description = (if definition.Description = "" then definition.Uid else definition.Description) }
-
         task {
             let! builder = TestApplication.CreateBuilderAsync argv
-            let framework = Framework definition
-
-            builder.RegisterTestFramework(
-                (fun _ -> FrameworkCapabilities(definition, framework.GracefulStop) :> ITestFrameworkCapabilities),
-                (fun _ serviceProvider ->
-                    framework.SetServices serviceProvider
-                    framework :> ITestFramework)
-            )
-            |> ignore
-
-            builder.AddTreeNodeFilterService framework
-            builder.AddMaximumFailedTestsService framework
-
-            for factory in definition.CommandLineOptionsProviders do
-                builder.CommandLine.AddProvider(fun () -> factory ())
-
-            definition |> BuilderExtensions.run builder
-
+            configure builder definition
             use! app = builder.BuildAsync()
             return! app.RunAsync()
         }

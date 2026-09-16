@@ -39,5 +39,5 @@ module TrxReport =
             Capabilities = definition.Capabilities @ [ capability ]
             BuilderExtensions =
                 definition.BuilderExtensions
-                @ [ BuilderExtension.create (fun builder -> builder.AddTrxReportProvider() |> ignore) ] }
+                @ [ BuilderExtension.create _.AddTrxReportProvider()] }
         |> FrameworkDefinition.addLeafProperties (fun leaf -> [ fullyQualifiedTypeName leaf ])
