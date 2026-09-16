@@ -32,6 +32,7 @@
     <Project Path="tests/Partas.TestingPlatform.CommandLine.Tests/Partas.TestingPlatform.CommandLine.Tests.fsproj" />
     <Project Path="tests/Partas.TestingPlatform.Trx.Tests/Partas.TestingPlatform.Trx.Tests.fsproj" />
     <Project Path="tests/Partas.Testing.Tests/Partas.Testing.Tests.fsproj" />
+    <Project Path="tests/Partas.TestingPlatform.Client.Tests/Partas.TestingPlatform.Client.Tests.fsproj" />
   </Folder>
   <!--#if (!Docs_none) -->
   <Folder Name="/docs/">
